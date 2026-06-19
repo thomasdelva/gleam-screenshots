@@ -66,8 +66,8 @@ one-click `accept-screenshots` label (see `.github/workflows/accept-screenshots.
 | `src/screenshot/dom.gleam` + `dom.ffi.mjs` | FFI: template injection (linkedom) + platform detection. |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/` | `template.html` + `styles.css` the tests render. |
-| `.github/workflows/screenshots.yml`, `screenshots-accept.yml` | Reusable (`workflow_call`) workflows consumers reference with `uses:`. |
-| `.github/workflows/ci.yml`, `accept.yml` | This repo's own thin callers that dogfood the reusable workflows. |
+| `.github/workflows/screenshots.yml` | Reusable (`workflow_call`) workflow consumers reference with `uses:`; `accept: true` switches it from compare to refresh-and-push. |
+| `.github/workflows/ci.yml`, `accept.yml` | This repo's own thin callers that dogfood it (regular run + label-gated accept). |
 
 - **Keep `src/` free of Lustre.** Lustre is a dev-dependency only (used by one
   example test); the library must stay view-layer agnostic and operate on HTML

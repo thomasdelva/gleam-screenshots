@@ -1,20 +1,37 @@
-# Reusable screenshot-regression workflow. Reference it from your repo — no
-# copy-paste — see the README "CI" section:
+# Reusable screenshot workflow. Reference it with `uses:` — no copy-paste — see
+# the README "CI" section.
 #
+# Regular run (compare against baselines; needs no permissions):
 #   jobs:
 #     screenshots:
 #       uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots.yml@main
 #       with:
 #         build-command: gleam run -m lustre/dev build --outdir=priv/static
 #
-# On a visual regression it fails the build and uploads the proposed screenshots
-# + diffs as an artifact for review; it never overwrites the baseline.
+# One-click accept (refresh baselines + push them back; gate it and grant write):
+#   jobs:
+#     accept:
+#       if: github.event.label.name == 'accept-screenshots'
+#       permissions:
+#         contents: write       # push the refreshed baselines
+#         pull-requests: write  # drop the label afterwards
+#       uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots.yml@main
+#       with:
+#         accept: true
+#         build-command: gleam run -m lustre/dev build --outdir=priv/static
+#
+# `accept` defaults to false, so a normal call never pushes and needs no
+# permissions. The commit/label steps below are simply skipped unless accept is on.
 
 name: screenshots
 
 on:
   workflow_call:
     inputs:
+      accept:
+        description: "Accept mode: adopt current renders as baselines and push them back, instead of comparing."
+        type: boolean
+        default: false
       gleam-version:
         type: string
         default: "1.14.0"
@@ -37,6 +54,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The PR's head branch, so accept mode can push baselines back to it.
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - uses: erlef/setup-beam@v1
         with:
@@ -65,12 +85,41 @@ jobs:
         if: ${{ inputs.build-command != '' }}
         run: ${{ inputs.build-command }}
 
-      - name: Run tests (incl. screenshot regression)
+      # Compare mode fails on a regression; accept mode refreshes baselines and passes.
+      - name: Run screenshot tests
         run: gleam test
         env:
+          SCREENSHOT_ACCEPT: ${{ inputs.accept }}
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           ODIFF_BIN: node_modules/.bin/odiff
 
+      # Accept mode only: push the refreshed baselines back to the branch.
+      - name: Commit refreshed baselines
+        if: ${{ inputs.accept }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No baseline changes to accept."
+          else
+            git commit -m "Accept updated screenshots"
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
+
+      - name: Remove the accept-screenshots label
+        if: ${{ inputs.accept && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              name: 'accept-screenshots',
+            }).catch(() => {});
+
+      # Compare mode only: surface the proposed screenshots + diffs on a regression.
       - name: Upload proposed screenshots and diffs
         if: failure()
         uses: actions/upload-artifact@v4

@@ -1,6 +1,6 @@
-# This repo's own one-click accept: dogfoods the reusable accept workflow.
-# Add the `accept-screenshots` label to a PR (or run manually) to refresh the
-# committed Linux baselines and push them back.
+# This repo's own one-click accept: dogfoods the reusable workflow in accept
+# mode. Add the `accept-screenshots` label to a PR (or run manually) to refresh
+# the committed Linux baselines and push them back.
 
 name: accept
 
@@ -15,4 +15,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: ./.github/workflows/screenshots-accept.yml
+    uses: ./.github/workflows/screenshots.yml
+    with:
+      accept: true

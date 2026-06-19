@@ -113,7 +113,8 @@ jobs:
 
 On a regression it **fails the build** and uploads the proposals + diffs as an
 artifact; it never overwrites the baseline. For the **one-click accept**, add a
-label-triggered caller that grants write access:
+second caller of the same workflow with `accept: true`, gated on a label and
+granted write access:
 
 ```yaml
 # .github/workflows/screenshots-accept.yml
@@ -127,15 +128,17 @@ jobs:
     permissions:
       contents: write       # push the refreshed baselines
       pull-requests: write  # drop the label afterwards
-    uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots-accept.yml@main
+    uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots.yml@main
     with:
+      accept: true
       build-command: gleam run -m lustre/dev build --outdir=priv/static
 ```
 
-Create the `accept-screenshots` label once; adding it to a PR refreshes the
-baselines on the branch. Both workflows take optional `gleam-version`,
-`otp-version`, `node-version` and `chrome-version` inputs. This repo dogfoods
-them via [`.github/workflows/`](.github/workflows/).
+`accept` defaults to `false`, so the regular caller never pushes and needs no
+permissions. Create the `accept-screenshots` label once; adding it to a PR
+refreshes the baselines on the branch. The workflow also takes optional
+`gleam-version`, `otp-version`, `node-version` and `chrome-version` inputs. This
+repo dogfoods both callers via [`.github/workflows/`](.github/workflows/).
 
 ## API
 
