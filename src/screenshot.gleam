@@ -25,9 +25,13 @@
 //// **red** until a human explicitly accepts the change. On a mismatch it writes
 //// a *proposed* screenshot next to the baseline (`<baseline>.<platform>.new.png`)
 //// and a visual diff (`<baseline>.<platform>.diff.png`) — but it never
-//// overwrites the baseline itself. The proposal is there to review (and to
-//// upload as a CI artifact); promote it with `accept` once you've confirmed the
-//// change is intentional.
+//// overwrites the baseline itself.
+////
+//// To accept intentional changes, re-run the suite with `SCREENSHOT_ACCEPT=true`
+//// (`SCREENSHOT_ACCEPT=true gleam test`): every baseline is refreshed from the
+//// current render and the suite passes. That single command is what the
+//// one-click CI accept job runs. `accept` / `accept_all` are also available to
+//// promote already-written proposals without re-rendering.
 
 import child_process
 import child_process/stdio
@@ -255,25 +259,50 @@ pub fn matches_baseline(
     size: options.size,
   ))
 
-  case simplifile.is_file(golden) {
-    Ok(True) -> {
-      use matched <- result.try(diff(
-        a: golden,
-        b: proposed,
-        to: diff_path,
-        threshold: options.threshold,
-      ))
-      case matched {
-        True -> {
-          // A clean run leaves no proposal/diff lying around.
-          let _ = simplifile.delete(proposed)
-          let _ = simplifile.delete(diff_path)
-          Ok(Match)
-        }
-        False -> Ok(Mismatch(diff: diff_path, proposed:))
-      }
+  case accepting() {
+    // One-click accept mode (`SCREENSHOT_ACCEPT=true`): adopt the current
+    // render as the baseline and pass. Re-running the suite once in this mode
+    // refreshes every baseline — the basis of the one-click CI accept job.
+    True -> {
+      use _ <- result.try(
+        simplifile.copy_file(at: proposed, to: golden)
+        |> result.replace_error(WriteFailed(golden)),
+      )
+      let _ = simplifile.delete(proposed)
+      let _ = simplifile.delete(diff_path)
+      Ok(Match)
     }
-    _ -> Ok(Missing(proposed:))
+    False ->
+      case simplifile.is_file(golden) {
+        Ok(True) -> {
+          use matched <- result.try(diff(
+            a: golden,
+            b: proposed,
+            to: diff_path,
+            threshold: options.threshold,
+          ))
+          case matched {
+            True -> {
+              // A clean run leaves no proposal/diff lying around.
+              let _ = simplifile.delete(proposed)
+              let _ = simplifile.delete(diff_path)
+              Ok(Match)
+            }
+            False -> Ok(Mismatch(diff: diff_path, proposed:))
+          }
+        }
+        _ -> Ok(Missing(proposed:))
+      }
+  }
+}
+
+/// Whether the suite is running in accept mode (`SCREENSHOT_ACCEPT` set to a
+/// truthy value), in which `matches_baseline` adopts the current render as the
+/// baseline instead of comparing against it.
+fn accepting() -> Bool {
+  case envoy.get("SCREENSHOT_ACCEPT") {
+    Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") -> True
+    _ -> False
   }
 }
 

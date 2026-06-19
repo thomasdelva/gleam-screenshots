@@ -143,31 +143,40 @@ a baseline to commit.
 
 ### Accepting a new baseline
 
-When a change is intentional, promote the proposal(s):
+When a change is intentional, accept it in one step.
+
+**Locally — one command** refreshes every baseline from the current render:
 
 ```sh
-# rename every proposal to its baseline
-for f in test/screenshots/*.new.png; do mv "$f" "${f%.new.png}.png"; done
+SCREENSHOT_ACCEPT=true gleam test
 ```
 
-or from Gleam:
+**In CI — one click**: add the `accept-screenshots` label to the PR (see CI
+below). The accept workflow re-renders, commits the refreshed baselines to the
+branch, and removes the label; the next run goes green.
+
+You can also promote already-written proposals without re-rendering:
 
 ```gleam
 screenshot.accept_all("test/screenshots")   // promotes every *.new.png
-// or a single one:
-screenshot.accept(baseline: "test/screenshots/home")
+screenshot.accept(baseline: "test/screenshots/home")  // or just one
 ```
 
 Then commit the updated `*.png` baselines.
 
 ## CI
 
-Copy [`templates/screenshot-regression.yml`](templates/screenshot-regression.yml)
-into `.github/workflows/`. It runs your tests, and on a visual regression it
-**fails the build** and uploads the proposed screenshots + diffs as an artifact
-for review — without ever overwriting the baseline, so a regression can't heal
-itself green. (This repo's own [`.github/workflows/test.yml`](.github/workflows/test.yml)
-is a working example.)
+Copy both workflow templates into `.github/workflows/`:
+
+- [`templates/screenshot-regression.yml`](templates/screenshot-regression.yml) —
+  runs your tests; on a visual regression it **fails the build** and uploads the
+  proposed screenshots + diffs as an artifact for review. It never overwrites
+  the baseline, so a regression can't heal itself green.
+- [`templates/screenshot-accept.yml`](templates/screenshot-accept.yml) — the
+  **one-click accept**. Create an `accept-screenshots` label once; adding it to a
+  PR refreshes the baselines on the branch (or run the workflow manually).
+
+This repo dogfoods both: see [`.github/workflows/`](.github/workflows/).
 
 ## API
 
