@@ -91,15 +91,36 @@ body {
   margin-bottom: 16px;
 }
 
-/* Responsive: the fill colour is driven by a viewport-width media query,
-   so the same markup renders amber on a narrow viewport and green on a
-   wide one — proving the requested ScreenSize reaches the page. */
-.responsive {
-  height: 100vh;
-  background: #f59e0b;
+/* Responsive layout: the classic sidebar + main pattern. On a narrow viewport
+   the two panels STACK (sidebar above main); past the 700px breakpoint they
+   sit SIDE BY SIDE (fixed sidebar, fluid main). The two baselines are meant to
+   look obviously different — stacked vs columns — so the screenshot itself
+   shows that the viewport width reached the page and flipped the layout. */
+.layout {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "side"
+    "main";
+}
+.layout .side {
+  grid-area: side;
+  min-height: 80px;
+  border-radius: 8px;
+  background: #7c3aed;
+}
+.layout .main {
+  grid-area: main;
+  min-height: 220px;
+  border-radius: 8px;
+  border: 2px solid #38bdf8;
+  background: #1e293b;
 }
 @media (min-width: 700px) {
-  .responsive {
-    background: #10b981;
+  .layout {
+    grid-template-columns: 200px 1fr;
+    grid-template-areas: "side main";
   }
 }

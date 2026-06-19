@@ -118,24 +118,23 @@ pub fn text_wrapping_desktop_test() {
   matches("prose_desktop", prose, screenshot.desktop)
 }
 
-/// Media queries — the same markup renders amber on a narrow viewport and
-/// green on a wide one. Two baselines prove the ScreenSize reaches the page.
-pub fn responsive_narrow_test() {
+/// Media-query layout — the same sidebar + main markup stacks on mobile and
+/// sits side-by-side on desktop. The two baselines are visibly different
+/// (stacked vs columns), so they document at a glance that the viewport width
+/// reached the page and the breakpoint flipped the layout.
+const layout = "<div class=\"layout\">"
+  <> "<div class=\"side\"></div>"
+  <> "<div class=\"main\"></div>"
+  <> "</div>"
+
+pub fn responsive_mobile_test() {
   use <- skip_without_browser
-  matches(
-    "responsive_narrow",
-    "<div class=\"responsive\"></div>",
-    screenshot.mobile,
-  )
+  matches("responsive_mobile", layout, screenshot.mobile)
 }
 
-pub fn responsive_wide_test() {
+pub fn responsive_desktop_test() {
   use <- skip_without_browser
-  matches(
-    "responsive_wide",
-    "<div class=\"responsive\"></div>",
-    screenshot.desktop,
-  )
+  matches("responsive_desktop", layout, screenshot.desktop)
 }
 
 /// Optional Lustre interop: build a view with Lustre, stringify it with
