@@ -94,6 +94,10 @@ jobs:
           ODIFF_BIN: node_modules/.bin/odiff
 
       # Accept mode only: push the refreshed baselines back to the branch.
+      # Note: this pushes with the default GITHUB_TOKEN, and GitHub does not
+      # re-trigger workflows on GITHUB_TOKEN pushes — so the regression check
+      # won't re-run itself. Re-run it manually, or check out above with a PAT
+      # (`token:`) here to make CI self-heal to green.
       - name: Commit refreshed baselines
         if: ${{ inputs.accept }}
         run: |

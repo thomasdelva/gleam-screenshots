@@ -140,6 +140,13 @@ refreshes the baselines on the branch. The workflow also takes optional
 `gleam-version`, `otp-version`, `node-version` and `chrome-version` inputs. This
 repo dogfoods both callers via [`.github/workflows/`](.github/workflows/).
 
+> **After accepting, re-run the regression check.** The accept job pushes with
+> the default `GITHUB_TOKEN`, and GitHub does not trigger new workflow runs from
+> `GITHUB_TOKEN` pushes, so the regression check won't re-run itself — re-run it
+> from the Actions tab (the accept commit is already correct). To make it
+> self-heal to green automatically, push from the accept job with a PAT
+> (`actions/checkout` with a `token:` secret) instead.
+
 ## API
 
 | Function | Purpose |

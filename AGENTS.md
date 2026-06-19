@@ -56,7 +56,10 @@ SCREENSHOT_ACCEPT=true gleam test     # adopt current renders as baselines, then
 
 Only commit baselines for the platform you actually rendered on — do not
 hand-edit or overwrite another platform's `*.png`. In CI, accepting is a
-one-click `accept-screenshots` label (see `.github/workflows/accept-screenshots.yml`).
+one-click `accept-screenshots` label (see `.github/workflows/accept.yml`). The
+accept job pushes with `GITHUB_TOKEN`, which does not re-trigger workflows, so
+re-run the regression check afterwards (or wire a PAT push) to refresh its
+status.
 
 ## Layout & conventions
 
