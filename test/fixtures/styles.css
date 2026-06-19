@@ -1,0 +1,126 @@
+/* Stylesheet for the screenshot test fixtures. Linked relatively from
+   template.html, so it also exercises that a template's relative
+   <link rel="stylesheet"> resolves under the file:// URL Chrome loads.
+
+   The fixtures lean on font-independent CSS (layout, colour, borders,
+   gradients) so baselines stay stable across machines. */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+/* Flexbox: a row of evenly distributed colour blocks. */
+.row {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+.box {
+  flex: 1 1 0;
+  height: 120px;
+  border-radius: 8px;
+}
+.box.a {
+  background: #ef4444;
+}
+.box.b {
+  background: #22c55e;
+}
+.box.c {
+  background: #3b82f6;
+}
+
+/* CSS grid: a 3-column gallery of bordered cells. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 16px;
+}
+.cell {
+  height: 80px;
+  border-radius: 6px;
+  border: 3px solid #f8fafc;
+  background: #1e293b;
+}
+
+/* A card combining border, radius and a linear gradient. */
+.card {
+  margin: 24px;
+  padding: 24px;
+  border: 2px solid #38bdf8;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #7c3aed, #db2777);
+}
+.card h2 {
+  font-size: 28px;
+}
+.card p {
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+/* Running text in a fluid column. The paragraph wraps at different points
+   depending on the viewport width, so the same markup produces a taller
+   block on mobile than on desktop — a regression in line-height, font-size,
+   measure or wrapping shows up immediately. */
+.prose {
+  max-width: 65ch;
+  margin: 24px auto;
+  padding: 0 16px;
+  font-size: 18px;
+  line-height: 1.6;
+}
+.prose h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+.prose p {
+  margin-bottom: 16px;
+}
+
+/* Responsive layout: the classic sidebar + main pattern. On a narrow viewport
+   the two panels STACK (sidebar above main); past the 700px breakpoint they
+   sit SIDE BY SIDE (fixed sidebar, fluid main). The two baselines are meant to
+   look obviously different — stacked vs columns — so the screenshot itself
+   shows that the viewport width reached the page and flipped the layout. */
+.layout {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "side"
+    "main";
+}
+.layout .side {
+  grid-area: side;
+  min-height: 80px;
+  border-radius: 8px;
+  background: #7c3aed;
+}
+.layout .main {
+  grid-area: main;
+  min-height: 220px;
+  border-radius: 8px;
+  border: 2px solid #38bdf8;
+  background: #1e293b;
+}
+@media (min-width: 700px) {
+  .layout {
+    grid-template-columns: 200px 1fr;
+    grid-template-areas: "side main";
+  }
+}

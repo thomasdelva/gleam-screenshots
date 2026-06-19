@@ -1,0 +1,16 @@
+*.beam
+*.ez
+/build
+erl_crash.dump
+node_modules/
+
+# Local env (copy from .envrc.example)
+.envrc
+
+# Scratch render files written next to templates during a screenshot run.
+.screenshot_render.*.html
+
+# Proposed screenshots + visual diffs produced on a mismatch. Baselines
+# (<name>.<platform>.png) ARE committed; these transient siblings are not.
+*.new.png
+*.diff.png

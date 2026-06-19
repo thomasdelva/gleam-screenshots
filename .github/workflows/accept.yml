@@ -1,0 +1,20 @@
+# This repo's own one-click accept: dogfoods the reusable workflow in accept
+# mode. Add the `accept-screenshots` label to a PR (or run manually) to refresh
+# the committed Linux baselines and push them back.
+
+name: accept
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  accept:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'accept-screenshots'
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/screenshots.yml
+    with:
+      accept: true
