@@ -36,6 +36,11 @@ The library shells out to external tools, located via environment variables:
 The template helpers also use the [`linkedom`](https://www.npmjs.com/package/linkedom)
 npm package (`npm i -D linkedom`).
 
+> Renders use Chrome's `--headless=old` so the CSS viewport matches the
+> requested `ScreenSize` exactly (`--headless=new` reserves a ~87px region, so a
+> `100vh` element renders short). On a Chrome build that has dropped old
+> headless, set `SCREENSHOT_HEADLESS=new` and regenerate baselines.
+
 ## Install
 
 ```sh

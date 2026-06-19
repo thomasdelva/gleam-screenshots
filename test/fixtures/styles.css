@@ -71,6 +71,26 @@ body {
   font-size: 16px;
 }
 
+/* Running text in a fluid column. The paragraph wraps at different points
+   depending on the viewport width, so the same markup produces a taller
+   block on mobile than on desktop — a regression in line-height, font-size,
+   measure or wrapping shows up immediately. */
+.prose {
+  max-width: 65ch;
+  margin: 24px auto;
+  padding: 0 16px;
+  font-size: 18px;
+  line-height: 1.6;
+}
+.prose h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+.prose p {
+  margin-bottom: 16px;
+}
+
 /* Responsive: the fill colour is driven by a viewport-width media query,
    so the same markup renders amber on a narrow viewport and green on a
    wide one — proving the requested ScreenSize reaches the page. */

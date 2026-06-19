@@ -94,6 +94,30 @@ pub fn card_desktop_test() {
   matches("card", content, screenshot.desktop)
 }
 
+/// Running text that wraps. The same paragraph reflows to a different number
+/// of lines at mobile vs desktop width, so each size gets its own baseline —
+/// a font-size / line-height / measure / wrapping regression surfaces here.
+const prose = "<article class=\"prose\">"
+  <> "<h1>On memorising poems</h1>"
+  <> "<p>Spaced repetition turns a wall of unfamiliar verse into something "
+  <> "you can recall on demand. Each card surfaces a line just before you "
+  <> "would have forgotten it, and the interval stretches a little further "
+  <> "every time you succeed.</p>"
+  <> "<p>The trick is to keep the sessions short and frequent. A few minutes "
+  <> "of cloze deletion in the morning beats an hour of staring on a Sunday "
+  <> "afternoon, because the forgetting curve is steepest in the first days.</p>"
+  <> "</article>"
+
+pub fn text_wrapping_mobile_test() {
+  use <- skip_without_browser
+  matches("prose_mobile", prose, screenshot.mobile)
+}
+
+pub fn text_wrapping_desktop_test() {
+  use <- skip_without_browser
+  matches("prose_desktop", prose, screenshot.desktop)
+}
+
 /// Media queries — the same markup renders amber on a narrow viewport and
 /// green on a wide one. Two baselines prove the ScreenSize reaches the page.
 pub fn responsive_narrow_test() {

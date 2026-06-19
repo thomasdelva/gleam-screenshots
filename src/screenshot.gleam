@@ -354,7 +354,11 @@ fn run_chrome(
   use chrome <- result.try(env("CHROME_BIN"))
 
   let args = [
-    "--headless=new",
+    // `old` headless makes the CSS viewport equal the requested window size.
+    // `new` headless reserves a phantom ~87px top-chrome region, so a 100vh
+    // element renders short of the screenshot height. Overridable via
+    // SCREENSHOT_HEADLESS for Chrome builds that have dropped old headless.
+    "--headless=" <> headless_mode(),
     "--disable-gpu",
     "--no-sandbox",
     "--hide-scrollbars",
@@ -400,6 +404,15 @@ fn write_scratch(
 
 fn env(name: String) -> Result(String, Error) {
   envoy.get(name) |> result.replace_error(MissingBinary(name))
+}
+
+/// The Chrome headless mode, `old` by default (exact-viewport screenshots).
+/// Set `SCREENSHOT_HEADLESS=new` on Chrome builds without old headless.
+fn headless_mode() -> String {
+  case envoy.get("SCREENSHOT_HEADLESS") {
+    Ok("new") -> "new"
+    _ -> "old"
+  }
 }
 
 /// Resolve `path` to an absolute path (Chrome's `file://` URL needs one).
