@@ -137,8 +137,9 @@ jobs:
 `accept` defaults to `false`, so the regular caller never pushes and needs no
 permissions. Create the `accept-screenshots` label once; adding it to a PR
 refreshes the baselines on the branch. The workflow also takes optional
-`gleam-version`, `otp-version`, `node-version` and `chrome-version` inputs. This
-repo dogfoods both callers via [`.github/workflows/`](.github/workflows/).
+`gleam-version`, `otp-version`, `node-version`, `chrome-version`, and
+`threshold` (loosen odiff's per-pixel tolerance for the whole run, e.g. `0.2`)
+inputs. This repo dogfoods both callers via [`.github/workflows/`](.github/workflows/).
 
 > **After accepting, re-run the regression check.** The accept job pushes with
 > the default `GITHUB_TOKEN`, and GitHub does not trigger new workflow runs from

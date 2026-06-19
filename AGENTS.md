@@ -35,6 +35,8 @@ gleam test
 - Renders use `--headless=old` (exact viewport). Override with
   `SCREENSHOT_HEADLESS=new` only if your Chrome dropped old headless — and
   regenerate baselines if you do.
+- `SCREENSHOT_THRESHOLD=0.2` loosens odiff's per-pixel tolerance for the whole
+  run (default `0.1`); the `threshold` workflow input sets it in CI.
 
 ## Baselines
 

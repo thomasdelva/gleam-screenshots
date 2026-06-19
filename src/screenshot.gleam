@@ -23,6 +23,10 @@
 //// requested `ScreenSize` exactly. On a Chrome build that has dropped old
 //// headless, set `SCREENSHOT_HEADLESS=new` and regenerate baselines.
 ////
+//// odiff's per-pixel colour threshold defaults to `0.1`; override it for a
+//// whole run with `SCREENSHOT_THRESHOLD` (e.g. `0.2`) to tame cross-environment
+//// rendering jitter without touching tests or baselines.
+////
 //// ## The regression loop
 ////
 //// `matches_baseline` is designed so a real visual regression keeps the build
@@ -272,7 +276,7 @@ pub fn matches_baseline(
             a: golden,
             b: proposed,
             to: diff_path,
-            threshold: options.threshold,
+            threshold: threshold_for(options.threshold),
           ))
           case matched {
             True -> {
@@ -296,6 +300,16 @@ fn accepting() -> Bool {
   case envoy.get("SCREENSHOT_ACCEPT") {
     Ok("true") | Ok("1") -> True
     _ -> False
+  }
+}
+
+/// The effective odiff threshold. `SCREENSHOT_THRESHOLD` (a decimal like
+/// `0.2`) overrides the per-test `default` for the whole run when set — handy
+/// for loosening tolerance in CI without editing tests or baselines.
+fn threshold_for(default: Float) -> Float {
+  case envoy.get("SCREENSHOT_THRESHOLD") {
+    Ok(value) -> result.unwrap(float.parse(value), default)
+    Error(_) -> default
   }
 }
 

@@ -48,6 +48,10 @@ on:
         description: "Command that builds the assets your template links (e.g. CSS). Omit if none."
         type: string
         default: ""
+      threshold:
+        description: "odiff per-pixel colour threshold (e.g. 0.2) applied to the whole run. Empty = the per-test default (0.1)."
+        type: string
+        default: ""
 
 jobs:
   screenshots:
@@ -90,6 +94,7 @@ jobs:
         run: gleam test
         env:
           SCREENSHOT_ACCEPT: ${{ inputs.accept }}
+          SCREENSHOT_THRESHOLD: ${{ inputs.threshold }}
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           ODIFF_BIN: node_modules/.bin/odiff
 
