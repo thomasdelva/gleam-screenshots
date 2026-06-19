@@ -1,0 +1,113 @@
+# Screenshot regression workflow — copy to .github/workflows/ in your project.
+#
+# What it does:
+#   - Runs your `gleam test` suite, which includes screenshot regression tests
+#     built on the `gleam_screenshots` library.
+#   - On a visual regression the suite FAILS (stays red). The failing test
+#     leaves a proposed screenshot (`<name>.<platform>.new.png`) and a visual
+#     diff (`<name>.<platform>.diff.png`) on disk; this workflow uploads them
+#     as a build artifact so you can download and review the proposed change.
+#   - The baseline is never auto-overwritten, so a genuine regression can't
+#     silently "heal" itself green — a human accepts the new screenshot
+#     explicitly (see "Accepting a new baseline" below).
+#
+# Accepting a new baseline (when the change is intentional):
+#   1. Download the `screenshot-proposals` artifact from the failed run, OR
+#      reproduce locally with `gleam test` (see the project README).
+#   2. Promote the proposal to the baseline and commit it, e.g.:
+#         for f in test/screenshots/*.new.png; do mv "$f" "${f%.new.png}.png"; done
+#         git add test/screenshots && git commit -m "Accept new screenshots"
+#      (or call `screenshot.accept_all("test/screenshots")` from a small script.)
+#
+# Notes:
+#   - This default uses upload-artifact and needs NO write permissions, so it is
+#     safe on public repos and forks. An optional auto-commit variant that
+#     pushes the proposals to the PR branch is shown (commented) at the bottom.
+#   - Pin `gleam-version` / `otp-version` to match your project.
+
+name: screenshots
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.14.0"
+          rebar3-version: "3"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Installs the JS peer deps the library shells out to: `odiff-bin`
+      # (the diff binary) and `linkedom` (template injection). Make sure both
+      # are in your package.json devDependencies.
+      - run: npm ci
+
+      - run: gleam deps download
+
+      - run: gleam format --check src test
+
+      # A real Chrome/Chromium for the headless screenshots. Pin a version so
+      # renders stay deterministic across runs.
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: "131.0.6778.204"
+
+      # --- Project-specific: build any assets your screenshot template links ---
+      # The template's <link rel="stylesheet"> must resolve on disk. For a
+      # Lustre + Tailwind project that's typically:
+      #   - run: gleam run -m lustre/dev build --outdir=priv/static
+      # For an htmx project, build/copy your CSS to where the template expects.
+
+      - name: Run tests (incl. screenshot regression)
+        run: gleam test
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          ODIFF_BIN: node_modules/.bin/odiff
+
+      # On failure, surface the proposed screenshots + diffs for review. The
+      # build stays red; nothing is pushed back to the branch.
+      - name: Upload proposed screenshots and diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-proposals
+          path: |
+            **/*.new.png
+            **/*.diff.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # --- Optional: auto-commit proposals to the PR branch -----------------------
+  # Instead of (or in addition to) the artifact upload, you can push the
+  # proposed *.new.png files to the PR branch so reviewers see them inline in
+  # the "Files changed" tab. This still keeps the build red, because the
+  # baseline itself is never modified. It needs `contents: write` and is
+  # excluded for forks. Uncomment to enable, and remove the artifact step above
+  # if you don't also want it.
+  #
+  #     permissions:
+  #       contents: write
+  #     steps:
+  #       ... (same setup as above) ...
+  #       - name: Commit proposed screenshots on failure
+  #         if: failure() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
+  #         run: |
+  #           git config user.name "github-actions[bot]"
+  #           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+  #           git add '**/*.new.png' '**/*.diff.png'
+  #           if ! git diff --cached --quiet; then
+  #             git commit -m "Propose updated screenshots (review & accept by renaming *.new.png)"
+  #             git push origin HEAD:${{ github.head_ref }}
+  #           fi

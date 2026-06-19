@@ -1,0 +1,10 @@
+{
+  "name": "gleam_screenshots",
+  "private": true,
+  "type": "module",
+  "description": "JS peer dependencies for the gleam_screenshots library.",
+  "devDependencies": {
+    "linkedom": "^0.18.5",
+    "odiff-bin": "^4.3.8"
+  }
+}
