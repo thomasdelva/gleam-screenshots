@@ -19,6 +19,10 @@
 //// The template helpers additionally need the `linkedom` npm package
 //// (`npm i -D linkedom`).
 ////
+//// Renders use Chrome's `--headless=old` so the CSS viewport matches the
+//// requested `ScreenSize` exactly. On a Chrome build that has dropped old
+//// headless, set `SCREENSHOT_HEADLESS=new` and regenerate baselines.
+////
 //// ## The regression loop
 ////
 //// `matches_baseline` is designed so a real visual regression keeps the build
