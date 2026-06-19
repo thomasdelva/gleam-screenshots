@@ -62,7 +62,7 @@ one-click `accept-screenshots` label (see `.github/workflows/accept-screenshots.
 
 | Path | Role |
 | --- | --- |
-| `src/screenshot.gleam` | Public API: `capture`, `capture_in_template`, `render`, `diff`, `matches_baseline`, `accept`/`accept_all`. |
+| `src/screenshot.gleam` | Public API: `capture`, `capture_in_template`, `render`, `diff`, `matches_baseline`. |
 | `src/screenshot/dom.gleam` + `dom.ffi.mjs` | FFI: template injection (linkedom) + platform detection. |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/` | `template.html` + `styles.css` the tests render. |

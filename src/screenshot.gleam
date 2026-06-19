@@ -34,8 +34,7 @@
 //// To accept intentional changes, re-run the suite with `SCREENSHOT_ACCEPT=true`
 //// (`SCREENSHOT_ACCEPT=true gleam test`): every baseline is refreshed from the
 //// current render and the suite passes. That single command is what the
-//// one-click CI accept job runs. `accept` / `accept_all` are also available to
-//// promote already-written proposals without re-rendering.
+//// one-click CI accept job runs.
 
 import child_process
 import child_process/stdio
@@ -137,7 +136,15 @@ pub fn capture(
   size size: ScreenSize,
   base base: String,
 ) -> Result(Nil, Error) {
-  use render_abs <- result.try(write_scratch(html, base, path))
+  use base_abs <- result.try(absolute(base))
+  // A scratch file named after `path` keeps concurrent captures from
+  // clobbering one shared name, and lets the document's relative URLs resolve
+  // against `base` under the file:// URL.
+  let render_abs = base_abs <> "/.screenshot_render." <> slug(path) <> ".html"
+  use _ <- result.try(
+    simplifile.write(to: render_abs, contents: html)
+    |> result.replace_error(WriteFailed(render_abs)),
+  )
   run_chrome(render_abs, path, size)
 }
 
@@ -155,17 +162,7 @@ pub fn capture_in_template(
   size size: ScreenSize,
 ) -> Result(Nil, Error) {
   use combined <- result.try(render(content, template, selector))
-  use template_abs <- result.try(absolute(template))
-  let render_abs =
-    directory_of(template_abs)
-    <> "/.screenshot_render."
-    <> slug(path)
-    <> ".html"
-  use _ <- result.try(
-    simplifile.write(to: render_abs, contents: combined)
-    |> result.replace_error(WriteFailed(render_abs)),
-  )
-  run_chrome(render_abs, path, size)
+  capture(html: combined, to: path, size:, base: directory_of(template))
 }
 
 /// Read the HTML `template` file and inject `content` at the first element
@@ -300,52 +297,14 @@ pub fn matches_baseline(
   }
 }
 
-/// Whether the suite is running in accept mode (`SCREENSHOT_ACCEPT` set to a
-/// truthy value), in which `matches_baseline` adopts the current render as the
-/// baseline instead of comparing against it.
+/// Whether the suite is running in accept mode (`SCREENSHOT_ACCEPT=true`), in
+/// which `matches_baseline` adopts the current render as the baseline instead
+/// of comparing against it.
 fn accepting() -> Bool {
   case envoy.get("SCREENSHOT_ACCEPT") {
-    Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") -> True
+    Ok("true") | Ok("1") -> True
     _ -> False
   }
-}
-
-/// Promote a proposed screenshot to the committed baseline for the current
-/// platform: copies `<baseline>.<platform>.new.png` over
-/// `<baseline>.<platform>.png` and removes the proposal. Call this once you've
-/// confirmed a `Mismatch`/`Missing` is an intentional UI change.
-pub fn accept(baseline baseline: String) -> Result(Nil, Error) {
-  let plat = dom.platform()
-  let proposed = baseline <> "." <> plat <> ".new.png"
-  let golden = baseline <> "." <> plat <> ".png"
-  use _ <- result.try(
-    simplifile.copy_file(at: proposed, to: golden)
-    |> result.replace_error(WriteFailed(golden)),
-  )
-  let _ = simplifile.delete(proposed)
-  Ok(Nil)
-}
-
-/// Promote every proposed screenshot found under `dir` (recursively): each
-/// file ending in `.new.png` is copied over its baseline (the `.new` segment
-/// dropped) and removed. Returns how many were promoted. Useful for an "accept
-/// baselines" CI job.
-pub fn accept_all(dir dir: String) -> Result(Int, Error) {
-  use files <- result.try(
-    simplifile.get_files(in: dir)
-    |> result.replace_error(WriteFailed(dir)),
-  )
-  files
-  |> list.filter(string.ends_with(_, ".new.png"))
-  |> list.try_fold(0, fn(count, proposed) {
-    let golden = string.replace(proposed, ".new.png", ".png")
-    use _ <- result.try(
-      simplifile.copy_file(at: proposed, to: golden)
-      |> result.replace_error(WriteFailed(golden)),
-    )
-    let _ = simplifile.delete(proposed)
-    Ok(count + 1)
-  })
 }
 
 // MARK: Internals
@@ -390,20 +349,6 @@ fn run_chrome(
         output: "failed to start chrome at " <> chrome,
       ))
   }
-}
-
-fn write_scratch(
-  html: String,
-  base: String,
-  path: String,
-) -> Result(String, Error) {
-  use base_abs <- result.try(absolute(base))
-  let render_abs = base_abs <> "/.screenshot_render." <> slug(path) <> ".html"
-  use _ <- result.try(
-    simplifile.write(to: render_abs, contents: html)
-    |> result.replace_error(WriteFailed(render_abs)),
-  )
-  Ok(render_abs)
 }
 
 fn env(name: String) -> Result(String, Error) {

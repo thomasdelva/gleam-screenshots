@@ -114,7 +114,6 @@ This repo dogfoods both in [`.github/workflows/`](.github/workflows/).
 | `capture_in_template(content:, into:, at:, to:, size:)` | Inject a fragment into a template, then screenshot. |
 | `render(content:, into:, at:)` | Inject a fragment into a template, returning the combined HTML. |
 | `diff(a:, b:, to:, threshold:)` | Pixel-diff two PNGs with odiff. |
-| `accept(baseline:)` / `accept_all(dir:)` | Promote proposed screenshots to baselines. |
 
 ## Contributing
 
