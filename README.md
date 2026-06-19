@@ -93,16 +93,49 @@ When a change is intentional, accept it in one step:
 
 ## CI
 
-Copy both workflows into `.github/workflows/`:
+The workflows are **reusable** — reference them with `uses:`, no copy-paste. Add
+a caller to your repo's `.github/workflows/`:
 
-- [`templates/screenshot-regression.yml`](templates/screenshot-regression.yml) —
-  runs your tests; on a regression it **fails the build** and uploads the
-  proposals + diffs as an artifact. It never overwrites the baseline.
-- [`templates/screenshot-accept.yml`](templates/screenshot-accept.yml) — the
-  **one-click accept**: create an `accept-screenshots` label once, then adding it
-  to a PR refreshes the baselines on the branch.
+```yaml
+# .github/workflows/screenshots.yml
+name: screenshots
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  screenshots:
+    uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots.yml@main
+    with:
+      # command that builds the assets your template links — omit if none
+      build-command: gleam run -m lustre/dev build --outdir=priv/static
+```
 
-This repo dogfoods both in [`.github/workflows/`](.github/workflows/).
+On a regression it **fails the build** and uploads the proposals + diffs as an
+artifact; it never overwrites the baseline. For the **one-click accept**, add a
+label-triggered caller that grants write access:
+
+```yaml
+# .github/workflows/screenshots-accept.yml
+name: screenshots-accept
+on:
+  pull_request:
+    types: [labeled]
+jobs:
+  accept:
+    if: github.event.label.name == 'accept-screenshots'
+    permissions:
+      contents: write       # push the refreshed baselines
+      pull-requests: write  # drop the label afterwards
+    uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots-accept.yml@main
+    with:
+      build-command: gleam run -m lustre/dev build --outdir=priv/static
+```
+
+Create the `accept-screenshots` label once; adding it to a PR refreshes the
+baselines on the branch. Both workflows take optional `gleam-version`,
+`otp-version`, `node-version` and `chrome-version` inputs. This repo dogfoods
+them via [`.github/workflows/`](.github/workflows/).
 
 ## API
 
