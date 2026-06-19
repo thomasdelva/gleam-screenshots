@@ -195,6 +195,11 @@ This repo dogfoods both: see [`.github/workflows/`](.github/workflows/).
 | `diff(a:, b:, to:, threshold:)` | Pixel-diff two PNGs with odiff. |
 | `accept(baseline:)` / `accept_all(dir:)` | Promote proposed screenshots to baselines. |
 
+## Contributing
+
+Working on the library itself? See [AGENTS.md](AGENTS.md) for the build/test
+commands, how the baselines work, and repo conventions.
+
 ## Licence
 
 Apache-2.0

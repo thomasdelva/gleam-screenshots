@@ -1,8 +1,8 @@
 //// Test suite for the `screenshot` library. It doubles as living
-//// documentation: the screenshot tests exercise common CSS features
-//// (flexbox, grid, gradients, borders, media queries) across the mobile,
-//// tablet and desktop screen sizes, and show both the raw-HTML and the
-//// (optional) Lustre entry points.
+//// documentation: the screenshot tests exercise common CSS features across the
+//// mobile, tablet and desktop screen sizes — flexbox, CSS grid, gradients and
+//// borders, text wrapping/reflow, and media-query layout — and show both the
+//// raw-HTML and the (optional) Lustre entry points.
 ////
 //// Screenshot tests are skipped unless `CHROME_BIN` and `ODIFF_BIN` are set,
 //// so `gleam test` still runs the pure tests on a machine without a browser.
