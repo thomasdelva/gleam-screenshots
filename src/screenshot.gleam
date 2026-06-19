@@ -87,7 +87,7 @@ pub type Outcome {
   /// visual diff and the proposed new screenshot, kept for review. Fail.
   Mismatch(diff: String, proposed: String)
   /// No baseline exists yet for this platform. `proposed` is the freshly
-  /// captured render, kept so it can be promoted with `accept`. Fail.
+  /// captured render, kept so it can be promoted to the baseline. Fail.
   Missing(proposed: String)
 }
 
@@ -108,15 +108,10 @@ pub fn options(template template: String, selector selector: String) -> Options 
   Options(template:, selector:, size: mobile, threshold: 0.1)
 }
 
-/// Override the viewport size on an `Options`.
+/// Override the viewport size on an `Options`. Override other fields with a
+/// record update, e.g. `Options(..opts, threshold: 0.2)`.
 pub fn with_size(options: Options, size: ScreenSize) -> Options {
   Options(..options, size:)
-}
-
-/// Override the odiff per-pixel colour threshold (0.0–1.0) on an `Options`.
-/// Larger values tolerate bigger per-pixel colour differences.
-pub fn with_threshold(options: Options, threshold: Float) -> Options {
-  Options(..options, threshold:)
 }
 
 // MARK: Capture
@@ -137,9 +132,6 @@ pub fn capture(
   base base: String,
 ) -> Result(Nil, Error) {
   use base_abs <- result.try(absolute(base))
-  // A scratch file named after `path` keeps concurrent captures from
-  // clobbering one shared name, and lets the document's relative URLs resolve
-  // against `base` under the file:// URL.
   let render_abs = base_abs <> "/.screenshot_render." <> slug(path) <> ".html"
   use _ <- result.try(
     simplifile.write(to: render_abs, contents: html)
@@ -231,9 +223,9 @@ pub fn diff(
 /// This **never** overwrites the baseline. On a mismatch it returns
 /// `Mismatch(diff, proposed)` and leaves both files on disk for review; on a
 /// missing baseline it returns `Missing(proposed)`. Both are failures — the
-/// build stays red until you `accept` the proposal. On a match it returns
-/// `Match` and cleans up any stale proposal/diff so a green run leaves no
-/// noise.
+/// build stays red until you accept the new render (`SCREENSHOT_ACCEPT=true`).
+/// On a match it returns `Match` and cleans up any stale proposal/diff so a
+/// green run leaves no noise.
 ///
 /// In a test, assert on the result so the failure print surfaces the diff path:
 ///

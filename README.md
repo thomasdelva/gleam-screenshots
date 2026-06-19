@@ -152,7 +152,7 @@ repo dogfoods both callers via [`.github/workflows/`](.github/workflows/).
 | Function | Purpose |
 | --- | --- |
 | `matches_baseline(content:, baseline:, options:)` | Render → screenshot → diff vs the platform baseline. |
-| `options(template:, selector:)` / `with_size` / `with_threshold` | Build the config for `matches_baseline`. |
+| `options(template:, selector:)` / `with_size` | Build the config for `matches_baseline`. |
 | `capture(html:, to:, size:, base:)` | Screenshot a complete HTML document to a PNG. |
 | `capture_in_template(content:, into:, at:, to:, size:)` | Inject a fragment into a template, then screenshot. |
 | `render(content:, into:, at:)` | Inject a fragment into a template, returning the combined HTML. |
