@@ -1,14 +1,13 @@
-# This repo's own CI: render the fixtures and pixel-diff them against the
-# committed baselines (the screenshot suite), plus a formatting check. The suite
-# has no JavaScript-only code, so it runs on BOTH targets (Erlang + JavaScript) —
-# the library's own dual-target proof. There's no reusable workflow to call;
-# consumers write their own job like the one below and run `gleam test`.
+# This repo's own CI: a single BEAM job that runs the format check, then renders
+# the fixtures and pixel-diffs them against the committed baselines (the
+# screenshot suite) on BOTH targets (Erlang + JavaScript) — the library's
+# dual-target proof, sharing one setup-beam. There's no reusable workflow to
+# call; consumers write their own job like the one below and run `gleam test`.
 #
 # Accepting is folded into the same job: while the `accept-screenshots` label is
 # on the PR, the runs go into SCREENSHOT_ACCEPT mode (the library refreshes any
-# baseline that drifted past the threshold) and the commit step pushes the
-# result back. The label stays until removed, so every push keeps adopting. The
-# regular run needs none of that — `gleam test` alone is the compare.
+# baseline that drifted past the threshold) and the commit step pushes the result
+# back. The label stays until removed, so every push keeps adopting.
 
 name: ci
 
@@ -19,7 +18,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
 
 jobs:
-  screenshots:
+  gleam:
     runs-on: ubuntu-latest
     permissions:
       contents: write # accept mode pushes the refreshed baselines
@@ -38,6 +37,7 @@ jobs:
           otp-version: "27.1.2"
           gleam-version: "1.14.0"
           rebar3-version: "3"
+      - run: gleam format --check src test
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -73,18 +73,7 @@ jobs:
         with:
           name: screenshot-proposals
           path: |
-            **/*.new.png
-            **/*.diff.png
+            test/screenshots/**/*.new.png
+            test/screenshots/**/*.diff.png
           if-no-files-found: ignore
           retention-days: 14
-
-  format:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
-        with:
-          otp-version: "27.1.2"
-          gleam-version: "1.14.0"
-          rebar3-version: "3"
-      - run: gleam format --check src test
