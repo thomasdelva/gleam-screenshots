@@ -1,8 +1,8 @@
-# This repo's own CI: a single BEAM job that runs the format check, then renders
-# the fixtures and pixel-diffs them against the committed baselines (the
-# screenshot suite) on BOTH targets (Erlang + JavaScript) — the library's
-# dual-target proof, sharing one setup-beam. There's no reusable workflow to
-# call; consumers write their own job like the one below and run `gleam test`.
+# This repo's own CI: one job that runs the format check and the screenshot suite
+# (render the fixtures, pixel-diff against committed baselines) on both targets
+# (Erlang + JavaScript) — the library's dual-target proof. There's no reusable
+# workflow to call; consumers write their own job like the one below and run
+# `gleam test`.
 #
 # Accepting is folded into the same job: while the `accept-screenshots` label is
 # on the PR, the runs go into SCREENSHOT_ACCEPT mode (the library refreshes any
@@ -73,7 +73,7 @@ jobs:
         with:
           name: screenshot-proposals
           path: |
-            test/screenshots/**/*.new.png
-            test/screenshots/**/*.diff.png
+            **/*.new.png
+            **/*.diff.png
           if-no-files-found: ignore
           retention-days: 14
