@@ -146,7 +146,11 @@ pub fn capture(
     simplifile.write(to: render_abs, contents: html)
     |> result.replace_error(WriteFailed(render_abs)),
   )
-  run_chrome(render_abs, path, size)
+  let outcome = run_chrome(render_abs, path, size)
+  // The scratch render is only needed while Chrome loads it; remove it so it
+  // doesn't linger in (and get committed from) the caller's working tree.
+  let _ = simplifile.delete(render_abs)
+  outcome
 }
 
 @target(javascript)
