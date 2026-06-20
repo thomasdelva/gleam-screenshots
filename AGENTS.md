@@ -24,17 +24,24 @@ them, every screenshot test silently skips** (the suite is all rendering tests),
 so set them when you intend to actually exercise rendering:
 
 ```sh
-export CHROME_BIN=/path/to/chrome      # or Chrome for Testing
+export CHROME_BIN=/path/to/chrome-headless-shell
 export ODIFF_BIN=node_modules/.bin/odiff
 npm install                            # provides odiff-bin
-gleam test                             # default target; CI also runs --target javascript
+# Get chrome-headless-shell with:
+#   npx @puppeteer/browsers install chrome-headless-shell@<version>
+gleam test                             # default target; CI also runs both --target erlang/javascript
 ```
 
 - `odiff-bin` (npm) provides the diff binary; the suite has no JavaScript-only
   code, so it runs identically on both targets.
-- Renders use `--headless=old` (exact viewport). Override with
-  `SCREENSHOT_HEADLESS=new` only if your Chrome dropped old headless — and
-  regenerate baselines if you do.
+- **`CHROME_BIN` must be `chrome-headless-shell`**, not full Chrome: it sizes the
+  viewport to `--window-size` exactly (full Chrome's `--headless=new` leaves a
+  letterbox band — the module doc has the why), so `run_chrome` passes no
+  `--headless` flag. It renders WebGL via SwiftShader, covering `with_webgl` too.
+- WebGL/settle (`with_webgl`, `with_settle`) are opt-in `Options`, off by
+  default. `with_webgl` swaps `--disable-gpu` for the ANGLE/SwiftShader flags;
+  `with_settle` adds `--virtual-time-budget`. Assembly is `gpu_args`/`settle_args`
+  beside `run_chrome`.
 - `SCREENSHOT_THRESHOLD=0.2` loosens odiff's per-pixel tolerance for the whole
   run (default `0.1`); set it as a job `env` in CI.
 
