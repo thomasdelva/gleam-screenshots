@@ -1,11 +1,17 @@
-//// Project-agnostic screenshot regression testing for Gleam web UIs on the
-//// JavaScript target.
+//// Project-agnostic screenshot regression testing for Gleam web UIs, on the
+//// JavaScript target or the BEAM.
 ////
 //// It renders **raw HTML** with headless Chrome and pixel-diffs the result
 //// against a committed baseline with [odiff](https://github.com/dmtrKovalenko/odiff).
 //// Because it works on HTML strings, it is view-layer agnostic: use it with
 //// [Lustre](https://hexdocs.pm/lustre/) (pass `lustre/element.to_string(view)`),
 //// an htmx server that emits HTML fragments, or any hand-written template.
+////
+//// Shelling out to Chrome and odiff is done through per-target FFI, so the same
+//// code runs on Node and on Erlang/OTP. The template helpers (`render`,
+//// `capture_in_template`, `matches_baseline`) additionally use the JavaScript
+//// `linkedom` package, so they are JS-only; on the BEAM, render a full page and
+//// use `capture` / `document_matches_baseline`.
 ////
 //// ## Binaries
 ////
@@ -40,8 +46,6 @@
 //// current render and the suite passes. That single command is what the
 //// one-click CI accept job runs.
 
-import child_process
-import child_process/stdio
 import envoy
 import gleam/float
 import gleam/int
@@ -49,6 +53,7 @@ import gleam/list
 import gleam/result
 import gleam/string
 import screenshot/dom
+import screenshot/exec
 import simplifile
 
 // MARK: Types
@@ -144,12 +149,14 @@ pub fn capture(
   run_chrome(render_abs, path, size)
 }
 
+@target(javascript)
 /// Inject `content` into the HTML `template` file at the first element matching
 /// `selector`, then screenshot the combined page into `path`.
 ///
 /// The scratch render is written next to the template, so the template's
 /// relative `<link rel="stylesheet">` / `<img>` paths resolve. Requires
-/// `linkedom`.
+/// `linkedom`, so this is JavaScript-only; on the BEAM use `capture` with a
+/// complete HTML document.
 pub fn capture_in_template(
   content content: String,
   into template: String,
@@ -161,9 +168,11 @@ pub fn capture_in_template(
   capture(html: combined, to: path, size:, base: directory_of(template))
 }
 
+@target(javascript)
 /// Read the HTML `template` file and inject `content` at the first element
 /// matching `selector` (the same shape as `lustre.start`'s mount point),
-/// returning the combined document. Requires `linkedom`.
+/// returning the combined document. Requires `linkedom`, so this is
+/// JavaScript-only.
 pub fn render(
   content content: String,
   into template: String,
@@ -201,22 +210,19 @@ pub fn diff(
     diff_path,
   ]
 
-  case
-    child_process.from_file(odiff)
-    |> child_process.args(args)
-    |> child_process.run(stdio.capture(capture_stderr: True))
-  {
-    Ok(child_process.Output(status_code: 0, ..)) -> Ok(True)
-    Ok(child_process.Output(status_code: 22, ..)) -> Ok(False)
-    Ok(child_process.Output(status_code:, output:)) ->
-      Error(DiffFailed(status: status_code, output:))
-    Error(_) ->
-      Error(DiffFailed(status: -1, output: "failed to start odiff at " <> odiff))
+  // odiff exits 0 when the images match and 22 when they differ; anything else
+  // (including -1, which `exec.run` reports when odiff couldn't be started) is a
+  // genuine failure.
+  case exec.run(odiff, args) {
+    exec.Run(status: 0, ..) -> Ok(True)
+    exec.Run(status: 22, ..) -> Ok(False)
+    exec.Run(status:, output:) -> Error(DiffFailed(status:, output:))
   }
 }
 
 // MARK: Baseline regression helper
 
+@target(javascript)
 /// Render `content` into `options.template` at `options.selector`, screenshot
 /// it, and compare against the committed baseline for the current platform.
 ///
@@ -242,19 +248,50 @@ pub fn matches_baseline(
   baseline baseline: String,
   options options: Options,
 ) -> Result(Outcome, Error) {
+  check_baseline(baseline, options.threshold, fn(proposed) {
+    capture_in_template(
+      content:,
+      into: options.template,
+      at: options.selector,
+      to: proposed,
+      size: options.size,
+    )
+  })
+}
+
+/// Like `matches_baseline`, but for a **complete HTML document** instead of a
+/// fragment + template — no `linkedom`, so it runs on every target. This is the
+/// entry point for BEAM / htmx servers: pass the full page your server renders
+/// (inline its CSS, or reference assets relative to `baseline`'s directory).
+///
+/// The accept / mismatch / missing behaviour is identical to `matches_baseline`.
+pub fn document_matches_baseline(
+  document document: String,
+  baseline baseline: String,
+  size size: ScreenSize,
+  threshold threshold: Float,
+) -> Result(Outcome, Error) {
+  check_baseline(baseline, threshold, fn(proposed) {
+    capture(html: document, to: proposed, size:, base: directory_of(proposed))
+  })
+}
+
+/// The shared accept / compare / missing loop behind both baseline helpers.
+/// `capture_to` renders the subject into the given proposal path (via a template
+/// or a full document); everything after that — accept mode, the odiff compare,
+/// keeping proposals/diffs on failure, cleaning up on a match — is identical.
+fn check_baseline(
+  baseline: String,
+  threshold: Float,
+  capture_to: fn(String) -> Result(Nil, Error),
+) -> Result(Outcome, Error) {
   let plat = dom.platform()
   let golden = baseline <> "." <> plat <> ".png"
   let proposed = baseline <> "." <> plat <> ".new.png"
   let diff_path = baseline <> "." <> plat <> ".diff.png"
 
   let _ = simplifile.create_directory_all(directory_of(proposed))
-  use _ <- result.try(capture_in_template(
-    content:,
-    into: options.template,
-    at: options.selector,
-    to: proposed,
-    size: options.size,
-  ))
+  use _ <- result.try(capture_to(proposed))
 
   case accepting() {
     // One-click accept mode (`SCREENSHOT_ACCEPT=true`): adopt the current
@@ -276,7 +313,7 @@ pub fn matches_baseline(
             a: golden,
             b: proposed,
             to: diff_path,
-            threshold: threshold_for(options.threshold),
+            threshold: threshold_for(threshold),
           ))
           case matched {
             True -> {
@@ -341,19 +378,9 @@ fn run_chrome(
     "file://" <> render_abs,
   ]
 
-  case
-    child_process.from_file(chrome)
-    |> child_process.args(args)
-    |> child_process.run(stdio.capture(capture_stderr: True))
-  {
-    Ok(child_process.Output(status_code: 0, ..)) -> Ok(Nil)
-    Ok(child_process.Output(status_code:, output:)) ->
-      Error(BrowserFailed(status: status_code, output:))
-    Error(_) ->
-      Error(BrowserFailed(
-        status: -1,
-        output: "failed to start chrome at " <> chrome,
-      ))
+  case exec.run(chrome, args) {
+    exec.Run(status: 0, ..) -> Ok(Nil)
+    exec.Run(status:, output:) -> Error(BrowserFailed(status:, output:))
   }
 }
 
