@@ -14,13 +14,16 @@
 //// External tools are located through environment variables so the same code
 //// runs locally and in CI:
 ////
-//// - `CHROME_BIN` — a Chrome / Chromium executable.
+//// - `CHROME_BIN` — a `chrome-headless-shell` executable (see below).
 //// - `ODIFF_BIN`  — the odiff executable (`npm i -D odiff-bin` installs one at
 ////   `node_modules/.bin/odiff`).
 ////
-//// Renders use Chrome's `--headless=old` so the CSS viewport matches the
-//// requested `ScreenSize` exactly. On a Chrome build that has dropped old
-//// headless, set `SCREENSHOT_HEADLESS=new` and regenerate baselines.
+//// `CHROME_BIN` should be a [`chrome-headless-shell`](https://developer.chrome.com/blog/chrome-headless-shell)
+//// binary — the maintained standalone successor to old headless. It sizes the
+//// rendered viewport to the requested `ScreenSize` exactly, which is why the
+//// library wants it: full Chrome's `--headless=new --screenshot` reserves a
+//// fixed shorter viewport, leaving a letterbox band. Get the pinned build with
+//// `npx @puppeteer/browsers install chrome-headless-shell@<version>`.
 ////
 //// odiff's per-pixel colour threshold defaults to `0.1`; override it for a
 //// whole run with `SCREENSHOT_THRESHOLD` (e.g. `0.2`) to tame cross-environment
@@ -89,6 +92,48 @@ pub type Outcome {
   Missing(proposed: String)
 }
 
+/// Opt-in capture options for **live JavaScript UIs** — anything that draws to
+/// a `<canvas>` via WebGL or only appears after async work (a map, a chart, a 3D
+/// scene). Both knobs are off by default (`options()`), so a plain static
+/// snapshot needs nothing extra. See [`with_webgl`](#with_webgl) and
+/// [`with_settle`](#with_settle).
+pub type Options {
+  Options(webgl: Bool, settle: Int)
+}
+
+/// Default capture options: a single static snapshot — no WebGL, no settle wait.
+/// Build up from here with `with_webgl` / `with_settle`.
+pub fn options() -> Options {
+  Options(webgl: False, settle: 0)
+}
+
+/// Render through a software-rasterised WebGL backend (SwiftShader) and allow the
+/// page's `file://` ES modules to load. Turn this on to screenshot anything that
+/// draws to a `<canvas>` via WebGL. Off by default.
+///
+/// SwiftShader is deterministic for a given Chrome build, which is what makes a
+/// committed WebGL baseline reproducible — but pixels still differ across Chrome
+/// versions, so pin the browser version in CI. Almost always paired with
+/// [`with_settle`](#with_settle): a WebGL UI needs a frame or two (and usually
+/// some async setup) before it has anything to show.
+pub fn with_webgl(options: Options) -> Options {
+  Options(..options, webgl: True)
+}
+
+/// Wait for the page to settle before screenshotting, instead of capturing at
+/// first paint. `ms` is a Chrome *virtual-time* budget, **not** a wall-clock
+/// wait: the clock is fast-forwarded — timers, `requestAnimationFrame`, and
+/// pending fetches fire as fast as the CPU can run them — and the frame is
+/// captured once that work drains or the budget is reached, whichever comes
+/// first. So the budget is a *ceiling*, not a cost: a page that goes idle after
+/// 1s of page-time is captured then even with a `12_000` budget, and the real
+/// time spent is just the work itself (typically well under a wall-clock
+/// second). Set it generously. `0` (the default) captures immediately — the
+/// right choice for static HTML.
+pub fn with_settle(options: Options, ms ms: Int) -> Options {
+  Options(..options, settle: ms)
+}
+
 // MARK: Capture
 
 /// Screenshot a complete HTML document string into `path` (a PNG).
@@ -102,6 +147,7 @@ pub fn capture(
   to path: String,
   size size: ScreenSize,
   base base: String,
+  options options: Options,
 ) -> Result(Nil, Error) {
   use base_abs <- result.try(absolute(base))
   let render_abs = base_abs <> "/.screenshot_render." <> slug(path) <> ".html"
@@ -109,7 +155,7 @@ pub fn capture(
     simplifile.write(to: render_abs, contents: html)
     |> result.replace_error(WriteFailed(render_abs)),
   )
-  let outcome = run_chrome(render_abs, path, size)
+  let outcome = run_chrome(render_abs, path, size, options)
   // The scratch render is only needed while Chrome loads it; remove it so it
   // doesn't linger in (and get committed from) the caller's working tree.
   let _ = simplifile.delete(render_abs)
@@ -177,9 +223,16 @@ pub fn document_matches_baseline(
   baseline baseline: String,
   size size: ScreenSize,
   threshold threshold: Float,
+  options options: Options,
 ) -> Result(Outcome, Error) {
   check_baseline(baseline, threshold, fn(proposed) {
-    capture(html: document, to: proposed, size:, base: directory_of(proposed))
+    capture(
+      html: document,
+      to: proposed,
+      size:,
+      base: directory_of(proposed),
+      options:,
+    )
   })
 }
 
@@ -277,27 +330,31 @@ fn run_chrome(
   render_abs: String,
   path: String,
   size: ScreenSize,
+  options: Options,
 ) -> Result(Nil, Error) {
   use chrome <- result.try(env("CHROME_BIN"))
 
-  let args = [
-    // `old` headless makes the CSS viewport equal the requested window size.
-    // `new` headless reserves a phantom ~87px top-chrome region, so a 100vh
-    // element renders short of the screenshot height. Overridable via
-    // SCREENSHOT_HEADLESS for Chrome builds that have dropped old headless.
-    "--headless=" <> headless_mode(),
-    "--disable-gpu",
-    "--no-sandbox",
-    "--hide-scrollbars",
-    // Pin DPI so renders are deterministic across machines.
-    "--force-device-scale-factor=1",
-    "--screenshot=" <> path,
-    "--window-size="
-      <> int.to_string(size.width)
-      <> ","
-      <> int.to_string(size.height),
-    "file://" <> render_abs,
-  ]
+  // chrome-headless-shell is always headless and sizes the viewport to
+  // `--window-size` exactly, so no `--headless` flag is passed and the capture
+  // fills the requested `ScreenSize` with no letterbox band. (Why this binary
+  // rather than full Chrome: see the module doc.)
+  let args =
+    list.flatten([
+      [
+        "--no-sandbox",
+        "--hide-scrollbars",
+        // Pin DPI so renders are deterministic across machines.
+        "--force-device-scale-factor=1",
+        "--screenshot=" <> path,
+        "--window-size="
+          <> int.to_string(size.width)
+          <> ","
+          <> int.to_string(size.height),
+      ],
+      gpu_args(options.webgl),
+      settle_args(options.settle),
+      ["file://" <> render_abs],
+    ])
 
   case shellout.command(run: chrome, with: args, in: ".", opt: []) {
     Ok(_) -> Ok(Nil)
@@ -309,12 +366,38 @@ fn env(name: String) -> Result(String, Error) {
   envoy.get(name) |> result.replace_error(MissingBinary(name))
 }
 
-/// The Chrome headless mode, `old` by default (exact-viewport screenshots).
-/// Set `SCREENSHOT_HEADLESS=new` on Chrome builds without old headless.
-fn headless_mode() -> String {
-  case envoy.get("SCREENSHOT_HEADLESS") {
-    Ok("new") -> "new"
-    _ -> "old"
+/// GPU flags. The static-HTML path keeps `--disable-gpu` (fast, no GL stack).
+/// The WebGL path instead forces ANGLE's SwiftShader software rasteriser — the
+/// only way to get a deterministic `<canvas>` render headless on a GPU-less CI
+/// box, and required at all since Chrome 137 stopped auto-falling-back to it —
+/// and opens `file://` ES-module loading (off by default under the `null`
+/// origin), which a bundled web component needs to import its own modules.
+fn gpu_args(webgl: Bool) -> List(String) {
+  case webgl {
+    False -> ["--disable-gpu"]
+    True -> [
+      "--use-gl=angle",
+      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader",
+      "--allow-file-access-from-files",
+    ]
+  }
+}
+
+/// Settle flags. With a budget, Chrome runs every compositor stage and advances
+/// a virtual clock (so timers/rAF/fetches drain) before the screenshot, instead
+/// of firing at first paint; the networking flags keep that virtual clock from
+/// stalling on Chrome's own background phone-home. `0` adds nothing.
+fn settle_args(settle: Int) -> List(String) {
+  case settle > 0 {
+    False -> []
+    True -> [
+      "--run-all-compositor-stages-before-draw",
+      "--disable-background-networking",
+      "--disable-component-update",
+      "--no-first-run",
+      "--virtual-time-budget=" <> int.to_string(settle),
+    ]
   }
 }
 

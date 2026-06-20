@@ -17,7 +17,7 @@ explicitly accept the change; baselines are never silently overwritten.
 
 | Env var      | What                              | Get it                                   |
 | ------------ | --------------------------------- | ---------------------------------------- |
-| `CHROME_BIN` | a Chrome / Chromium executable    | system Chrome, or Chrome for Testing     |
+| `CHROME_BIN` | a `chrome-headless-shell` binary  | `npx @puppeteer/browsers install chrome-headless-shell@<version>` |
 | `ODIFF_BIN`  | the odiff executable              | `npm i -D odiff-bin` → `node_modules/.bin/odiff` |
 
 ## Install
@@ -56,6 +56,7 @@ pub fn home_page_test() {
     baseline: "test/screenshots/home",
     size: screenshot.desktop,
     threshold: 0.1,
+    options: screenshot.options(),
   )
   |> should.equal(Ok(screenshot.Match))
 }
@@ -64,6 +65,22 @@ pub fn home_page_test() {
 Sizes `mobile` (390×844), `tablet` (768×1024) and `desktop` (1280×800) are
 provided; build your own with `ScreenSize(width:, height:)`. For finer control,
 `capture` (HTML → PNG) and `diff` (PNG vs PNG) are exposed directly.
+
+### Live JavaScript UIs (WebGL, async content)
+
+`options()` is a static snapshot. For a UI that draws to a `<canvas>` via WebGL
+or only appears after async work (a map, a chart, a 3D scene), opt in:
+
+```gleam
+screenshot.options()
+|> screenshot.with_webgl
+|> screenshot.with_settle(ms: 12_000)
+```
+
+`with_webgl` renders through SwiftShader (deterministic per Chrome build);
+`with_settle` gives Chrome a virtual-time budget so timers/`rAF`/fetches drain
+before the frame is grabbed. See [`maplibre-lustre`](https://github.com/thomasdelva/maplibre-lustre)
+for a worked example screenshotting a live MapLibre map.
 
 ## Outcomes & accepting changes
 
@@ -117,15 +134,18 @@ jobs:
         with: { node-version: "22" }
       - run: npm ci # or: npm install --no-save odiff-bin
       - run: gleam deps download
-      - uses: browser-actions/setup-chrome@v1
-        id: setup-chrome
-        with: { chrome-version: "131.0.6778.204" }
+      # chrome-headless-shell (separate from full Chrome) renders an exact
+      # viewport. Its install line ends with the binary's absolute path.
+      - id: chrome
+        run: |
+          line=$(npx -y @puppeteer/browsers install "chrome-headless-shell@141.0.7390.37")
+          echo "path=${line##* }" >> "$GITHUB_OUTPUT"
       # build any assets your HTML references, if any:
       # - run: gleam run -m lustre/dev build --outdir=priv/static
       - run: gleam test
         env:
           SCREENSHOT_ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_BIN: ${{ steps.chrome.outputs.path }}
           ODIFF_BIN: node_modules/.bin/odiff
       - if: ${{ success() && contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
         run: |
@@ -161,9 +181,10 @@ This repo dogfoods this setup via
 
 | Function | Purpose |
 | --- | --- |
-| `document_matches_baseline(document:, baseline:, size:, threshold:)` | Screenshot a complete HTML document → diff vs the platform baseline. |
-| `capture(html:, to:, size:, base:)` | Screenshot a complete HTML document to a PNG. |
+| `document_matches_baseline(document:, baseline:, size:, threshold:, options:)` | Screenshot a complete HTML document → diff vs the platform baseline. |
+| `capture(html:, to:, size:, base:, options:)` | Screenshot a complete HTML document to a PNG. |
 | `diff(a:, b:, to:, threshold:)` | Pixel-diff two PNGs with odiff. |
+| `options()` / `with_webgl` / `with_settle(ms:)` | Capture options: static by default; opt into WebGL + a settle wait for live UIs. |
 
 ## Contributing
 

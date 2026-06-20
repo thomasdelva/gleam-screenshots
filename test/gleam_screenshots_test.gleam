@@ -119,6 +119,46 @@ pub fn lustre_element_test() {
   matches("lustre", element.to_string(view), screenshot.desktop)
 }
 
+// A live page whose final state only appears after async work: a full-bleed box,
+// red at first paint, that turns green from a 3s page-time `setTimeout`. The two
+// tests below pin both ends of the virtual-time budget against this same page,
+// so together they prove the `ms` value is honoured as a ceiling — not merely
+// that "some" settle happens.
+const async_page = "<div id=\"box\" style=\"position:fixed;inset:0;background:#e4002b\"></div>"
+  <> "<script>"
+  <> "setTimeout(function () {"
+  <> "  document.getElementById('box').style.background = '#1a7f37';"
+  <> "}, 3000);"
+  <> "</script>"
+
+/// Budget *past* the timeout: virtual time fast-forwards through the 3s
+/// `setTimeout`, so the capture is the settled (green) frame rather than the red
+/// first paint. Because the budget is page-time, not wall-clock, it still runs
+/// in a fraction of a real second.
+pub fn settle_captures_settled_frame_test() {
+  use <- skip_without_browser
+  matches_with(
+    "settle_settled",
+    async_page,
+    screenshot.mobile,
+    screenshot.options() |> screenshot.with_settle(ms: 10_000),
+  )
+}
+
+/// Budget *short* of the timeout: virtual time stops before the 3s `setTimeout`
+/// fires, so the capture is the red first paint. The contrast with the test
+/// above is the point — it pins that `with_settle` honours the budget *value* as
+/// a ceiling, rather than always draining everything.
+pub fn settle_below_work_captures_first_paint_test() {
+  use <- skip_without_browser
+  matches_with(
+    "settle_unsettled",
+    async_page,
+    screenshot.mobile,
+    screenshot.options() |> screenshot.with_settle(ms: 1000),
+  )
+}
+
 // MARK: Helpers
 
 /// Wrap a fragment in a complete HTML document with the fixture stylesheet
@@ -140,11 +180,21 @@ fn document(content: String) -> String {
 }
 
 fn matches(name: String, content: String, size: screenshot.ScreenSize) -> Nil {
+  matches_with(name, content, size, screenshot.options())
+}
+
+fn matches_with(
+  name: String,
+  content: String,
+  size: screenshot.ScreenSize,
+  options: screenshot.Options,
+) -> Nil {
   screenshot.document_matches_baseline(
     document: document(content),
     baseline: "test/screenshots/" <> name,
     size:,
     threshold: 0.1,
+    options:,
   )
   |> should.equal(Ok(screenshot.Match))
 }

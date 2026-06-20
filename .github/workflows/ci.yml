@@ -44,19 +44,24 @@ jobs:
       # The only JS peer dependency is the odiff binary.
       - run: npm ci
       - run: gleam deps download
-      - uses: browser-actions/setup-chrome@v1
-        id: setup-chrome
-        with:
-          chrome-version: "131.0.6778.204"
+      # Renders go through chrome-headless-shell (exact viewport, no letterbox
+      # band). It's a separate download from full Chrome; pull the pinned build
+      # from Chrome-for-Testing via @puppeteer/browsers, whose install line ends
+      # with the binary's absolute path.
+      - name: Install chrome-headless-shell
+        id: chrome
+        run: |
+          line=$(npx -y @puppeteer/browsers install "chrome-headless-shell@141.0.7390.37")
+          echo "path=${line##* }" >> "$GITHUB_OUTPUT"
       # Run the suite on both targets — the library is fully dual-target.
       - name: Screenshot tests (Erlang)
         run: gleam test --target erlang
         env:
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_BIN: ${{ steps.chrome.outputs.path }}
       - name: Screenshot tests (JavaScript)
         run: gleam test --target javascript
         env:
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_BIN: ${{ steps.chrome.outputs.path }}
       - name: Commit accepted baselines
         if: ${{ success() && env.SCREENSHOT_ACCEPT == 'true' }}
         run: |
