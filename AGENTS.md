@@ -3,9 +3,9 @@
 Operational notes for AI agents working **in this repository**. For using the
 library in another project, see [README.md](README.md) instead.
 
-`gleam_screenshots` is a Gleam (JavaScript target) library that screenshots raw
-HTML with headless Chrome and pixel-diffs it against committed baselines with
-odiff. The public API lives in `src/screenshot.gleam`.
+`gleam_screenshots` is a **dual-target** Gleam library (JavaScript + the BEAM)
+that screenshots raw HTML with headless Chrome and pixel-diffs it against
+committed baselines with odiff. The public API lives in `src/screenshot.gleam`.
 
 ## Commands
 
@@ -20,18 +20,18 @@ CI enforces `gleam format --check`, so always format before committing.
 ## Running the screenshot tests
 
 The screenshot tests need external binaries, found via env vars. **Without
-them, the screenshot tests silently skip** (only the pure tests run), so set
-them when you intend to actually exercise rendering:
+them, every screenshot test silently skips** (the suite is all rendering tests),
+so set them when you intend to actually exercise rendering:
 
 ```sh
 export CHROME_BIN=/path/to/chrome      # or Chrome for Testing
 export ODIFF_BIN=node_modules/.bin/odiff
-npm install                            # provides linkedom + odiff-bin
-gleam test
+npm install                            # provides odiff-bin
+gleam test                             # default target; CI also runs --target javascript
 ```
 
-- `linkedom` (npm) is imported by `src/screenshot/dom.ffi.mjs` for template
-  injection; `odiff-bin` provides the diff binary.
+- `odiff-bin` (npm) provides the diff binary; the suite has no JavaScript-only
+  code, so it runs identically on both targets.
 - Renders use `--headless=old` (exact viewport). Override with
   `SCREENSHOT_HEADLESS=new` only if your Chrome dropped old headless — and
   regenerate baselines if you do.
@@ -67,11 +67,10 @@ re-trigger workflows, so it can't loop; remove the label to re-arm the compare.
 
 | Path | Role |
 | --- | --- |
-| `src/screenshot.gleam` | Public API: `capture`, `document_matches_baseline` (any target), `capture_in_template`, `render`, `matches_baseline` (JS-only template path), `diff`. |
-| `src/screenshot/exec.gleam` | Thin wrapper over the `shellout` package: run an executable (Chrome, odiff) and capture its exit status + combined output, on both targets. |
-| `src/screenshot/dom.gleam` + `dom.ffi.mjs` + `src/screenshot_ffi.erl` | FFI: template injection (linkedom, JS-only) + host platform detection (both targets; `screenshot_ffi.erl` is the BEAM side of `platform`). |
+| `src/screenshot.gleam` | Public API (all dual-target): `capture`, `document_matches_baseline`, `diff`. Executables run via the `shellout` dependency. |
+| `src/screenshot.ffi.mjs` + `src/screenshot_ffi.erl` | Per-target FFI for host `platform()` detection only (Node `process.platform` / Erlang `os:type`). |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
-| `test/fixtures/` | `template.html` + `styles.css` the tests render. |
+| `test/fixtures/styles.css` | The stylesheet the tests inline into a complete HTML document. |
 | `.github/workflows/ci.yml` | This repo's own self-contained CI (screenshots + format); the screenshots job folds in the label-gated accept as a plain `git` commit step. |
 
 - **Keep `src/` free of Lustre.** Lustre is a dev-dependency only (used by one

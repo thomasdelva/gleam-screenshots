@@ -3,15 +3,11 @@
 ////
 //// It renders **raw HTML** with headless Chrome and pixel-diffs the result
 //// against a committed baseline with [odiff](https://github.com/dmtrKovalenko/odiff).
-//// Because it works on HTML strings, it is view-layer agnostic: use it with
-//// [Lustre](https://hexdocs.pm/lustre/) (pass `lustre/element.to_string(view)`),
-//// an htmx server that emits HTML fragments, or any hand-written template.
-////
-//// Shelling out to Chrome and odiff is done through per-target FFI, so the same
-//// code runs on Node and on Erlang/OTP. The template helpers (`render`,
-//// `capture_in_template`, `matches_baseline`) additionally use the JavaScript
-//// `linkedom` package, so they are JS-only; on the BEAM, render a full page and
-//// use `capture` / `document_matches_baseline`.
+//// Because it works on complete HTML document strings, it is view-layer
+//// agnostic: use it with [Lustre](https://hexdocs.pm/lustre/) (pass
+//// `lustre/element.to_string(view)`), an htmx server that emits HTML, or any
+//// hand-written template. The same code runs on Node and on Erlang/OTP —
+//// Chrome and odiff are driven through the dual-target `shellout` package.
 ////
 //// ## Binaries
 ////
@@ -21,9 +17,6 @@
 //// - `CHROME_BIN` — a Chrome / Chromium executable.
 //// - `ODIFF_BIN`  — the odiff executable (`npm i -D odiff-bin` installs one at
 ////   `node_modules/.bin/odiff`).
-////
-//// The template helpers additionally need the `linkedom` npm package
-//// (`npm i -D linkedom`).
 ////
 //// Renders use Chrome's `--headless=old` so the CSS viewport matches the
 //// requested `ScreenSize` exactly. On a Chrome build that has dropped old
@@ -35,11 +28,11 @@
 ////
 //// ## The regression loop
 ////
-//// `matches_baseline` is designed so a real visual regression keeps the build
-//// **red** until a human explicitly accepts the change. On a mismatch it writes
-//// a *proposed* screenshot next to the baseline (`<baseline>.<platform>.new.png`)
-//// and a visual diff (`<baseline>.<platform>.diff.png`) — but it never
-//// overwrites the baseline itself.
+//// `document_matches_baseline` is designed so a real visual regression keeps
+//// the build **red** until a human explicitly accepts the change. On a mismatch
+//// it writes a *proposed* screenshot next to the baseline
+//// (`<baseline>.<platform>.new.png`) and a visual diff
+//// (`<baseline>.<platform>.diff.png`) — but it never overwrites the baseline.
 ////
 //// To accept intentional changes, re-run the suite with `SCREENSHOT_ACCEPT=true`
 //// (`SCREENSHOT_ACCEPT=true gleam test`): every baseline that has drifted past
@@ -53,8 +46,7 @@ import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
-import screenshot/dom
-import screenshot/exec
+import shellout
 import simplifile
 
 // MARK: Types
@@ -81,10 +73,6 @@ pub type Error {
   BrowserFailed(status: Int, output: String)
   /// odiff exited with an unexpected status. `output` is its captured stderr.
   DiffFailed(status: Int, output: String)
-  /// The template file could not be read.
-  TemplateNotFound(path: String)
-  /// The template had no element matching the mount selector.
-  SelectorNotFound(selector: String)
   /// A file could not be written (render scratch file, proposal, baseline...).
   WriteFailed(path: String)
 }
@@ -101,29 +89,6 @@ pub type Outcome {
   Missing(proposed: String)
 }
 
-/// Configuration shared by the baseline helper: which template to mount into,
-/// where to mount, the viewport, and the odiff per-pixel colour threshold.
-pub type Options {
-  Options(
-    template: String,
-    selector: String,
-    size: ScreenSize,
-    threshold: Float,
-  )
-}
-
-/// Default options for a template: mount at the given `selector`, render at
-/// `mobile` size, compare with odiff's default per-pixel threshold (`0.1`).
-pub fn options(template template: String, selector selector: String) -> Options {
-  Options(template:, selector:, size: mobile, threshold: 0.1)
-}
-
-/// Override the viewport size on an `Options`. Override other fields with a
-/// record update, e.g. `Options(..opts, threshold: 0.2)`.
-pub fn with_size(options: Options, size: ScreenSize) -> Options {
-  Options(..options, size:)
-}
-
 // MARK: Capture
 
 /// Screenshot a complete HTML document string into `path` (a PNG).
@@ -132,9 +97,6 @@ pub fn with_size(options: Options, size: ScreenSize) -> Options {
 /// URLs it references (stylesheets, images) resolve against that directory
 /// under the `file://` URL Chrome loads. The scratch file name is derived from
 /// `path`, so independent captures running concurrently never collide.
-///
-/// Use this for the raw-HTML / htmx case where you already have a full page.
-/// For mounting a fragment into a shared template, see `capture_in_template`.
 pub fn capture(
   html html: String,
   to path: String,
@@ -152,43 +114,6 @@ pub fn capture(
   // doesn't linger in (and get committed from) the caller's working tree.
   let _ = simplifile.delete(render_abs)
   outcome
-}
-
-@target(javascript)
-/// Inject `content` into the HTML `template` file at the first element matching
-/// `selector`, then screenshot the combined page into `path`.
-///
-/// The scratch render is written next to the template, so the template's
-/// relative `<link rel="stylesheet">` / `<img>` paths resolve. Requires
-/// `linkedom`, so this is JavaScript-only; on the BEAM use `capture` with a
-/// complete HTML document.
-pub fn capture_in_template(
-  content content: String,
-  into template: String,
-  at selector: String,
-  to path: String,
-  size size: ScreenSize,
-) -> Result(Nil, Error) {
-  use combined <- result.try(render(content, template, selector))
-  capture(html: combined, to: path, size:, base: directory_of(template))
-}
-
-@target(javascript)
-/// Read the HTML `template` file and inject `content` at the first element
-/// matching `selector` (the same shape as `lustre.start`'s mount point),
-/// returning the combined document. Requires `linkedom`, so this is
-/// JavaScript-only.
-pub fn render(
-  content content: String,
-  into template: String,
-  at selector: String,
-) -> Result(String, Error) {
-  use template_html <- result.try(
-    simplifile.read(from: template)
-    |> result.replace_error(TemplateNotFound(template)),
-  )
-  dom.mount_into_template(template: template_html, selector:, content:)
-  |> result.replace_error(SelectorNotFound(selector))
 }
 
 // MARK: Diff
@@ -216,19 +141,19 @@ pub fn diff(
   ]
 
   // odiff exits 0 when the images match and 22 when they differ; any other
-  // status (e.g. odiff couldn't be started) is a genuine failure.
-  case exec.run(odiff, args) {
-    exec.Run(status: 0, ..) -> Ok(True)
-    exec.Run(status: 22, ..) -> Ok(False)
-    exec.Run(status:, output:) -> Error(DiffFailed(status:, output:))
+  // status (e.g. odiff couldn't be started) is a genuine failure. `shellout`
+  // returns `Ok` only on exit 0, so a nonzero status arrives in the `Error` arm.
+  case shellout.command(run: odiff, with: args, in: ".", opt: []) {
+    Ok(_) -> Ok(True)
+    Error(#(22, _)) -> Ok(False)
+    Error(#(status, output)) -> Error(DiffFailed(status:, output:))
   }
 }
 
 // MARK: Baseline regression helper
 
-@target(javascript)
-/// Render `content` into `options.template` at `options.selector`, screenshot
-/// it, and compare against the committed baseline for the current platform.
+/// Screenshot a **complete HTML document** and compare it against the committed
+/// baseline for the current platform.
 ///
 /// `baseline` is a stem (e.g. `"test/screenshots/home"`); the helper appends
 /// `.<platform>.png` (e.g. `home.linux.png`). Each platform keeps its own
@@ -244,31 +169,9 @@ pub fn diff(
 /// In a test, assert on the result so the failure print surfaces the diff path:
 ///
 /// ```gleam
-/// screenshot.matches_baseline(content: html, baseline: stem, options: opts)
+/// screenshot.document_matches_baseline(document:, baseline:, size:, threshold:)
 /// |> should.equal(Ok(screenshot.Match))
 /// ```
-pub fn matches_baseline(
-  content content: String,
-  baseline baseline: String,
-  options options: Options,
-) -> Result(Outcome, Error) {
-  check_baseline(baseline, options.threshold, fn(proposed) {
-    capture_in_template(
-      content:,
-      into: options.template,
-      at: options.selector,
-      to: proposed,
-      size: options.size,
-    )
-  })
-}
-
-/// Like `matches_baseline`, but for a **complete HTML document** instead of a
-/// fragment + template — no `linkedom`, so it runs on every target. This is the
-/// entry point for BEAM / htmx servers: pass the full page your server renders
-/// (inline its CSS, or reference assets relative to `baseline`'s directory).
-///
-/// The accept / mismatch / missing behaviour is identical to `matches_baseline`.
 pub fn document_matches_baseline(
   document document: String,
   baseline baseline: String,
@@ -280,16 +183,16 @@ pub fn document_matches_baseline(
   })
 }
 
-/// The shared accept / compare / missing loop behind both baseline helpers.
-/// `capture_to` renders the subject into the given proposal path (via a template
-/// or a full document); everything after that — accept mode, the odiff compare,
-/// keeping proposals/diffs on failure, cleaning up on a match — is identical.
+/// The shared accept / compare / missing loop behind `document_matches_baseline`.
+/// `capture_to` renders the subject into the given proposal path; everything
+/// after that — accept mode, the odiff compare, keeping proposals/diffs on
+/// failure, cleaning up on a match — is the regression machinery.
 fn check_baseline(
   baseline: String,
   threshold: Float,
   capture_to: fn(String) -> Result(Nil, Error),
 ) -> Result(Outcome, Error) {
-  let plat = dom.platform()
+  let plat = platform()
   let golden = baseline <> "." <> plat <> ".png"
   let proposed = baseline <> "." <> plat <> ".new.png"
   let diff_path = baseline <> "." <> plat <> ".diff.png"
@@ -396,9 +299,9 @@ fn run_chrome(
     "file://" <> render_abs,
   ]
 
-  case exec.run(chrome, args) {
-    exec.Run(status: 0, ..) -> Ok(Nil)
-    exec.Run(status:, output:) -> Error(BrowserFailed(status:, output:))
+  case shellout.command(run: chrome, with: args, in: ".", opt: []) {
+    Ok(_) -> Ok(Nil)
+    Error(#(status, output)) -> Error(BrowserFailed(status:, output:))
   }
 }
 
@@ -414,6 +317,14 @@ fn headless_mode() -> String {
     _ -> "old"
   }
 }
+
+/// The host platform as Node's `process.platform` reports it ("linux",
+/// "darwin", "win32"). Baselines are keyed by OS because pixel rendering
+/// differs across rasterisation stacks; the render is by the same Chrome
+/// regardless of which runtime drove the capture.
+@external(erlang, "screenshot_ffi", "platform")
+@external(javascript, "./screenshot.ffi.mjs", "platform")
+fn platform() -> String
 
 /// Resolve `path` to an absolute path (Chrome's `file://` URL needs one).
 fn absolute(path: String) -> Result(String, Error) {

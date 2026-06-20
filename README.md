@@ -1,14 +1,17 @@
 # gleam_screenshots
 
-Screenshot regression testing for Gleam web UIs on the **JavaScript target**.
+Screenshot regression testing for Gleam web UIs, on the **JavaScript target or
+the BEAM**.
 
 It renders **raw HTML** with headless Chrome and pixel-diffs the result against a
 committed baseline with [odiff](https://github.com/dmtrKovalenko/odiff). Because
-it works on HTML strings it's view-layer agnostic — use it with
+it works on complete HTML documents it's view-layer agnostic — use it with
 [Lustre](https://hexdocs.pm/lustre/) (pass `element.to_string(view)`), an
 [htmx](https://htmx.org) server, or any template. The library never imports
-Lustre. A real regression keeps your build **red** until you explicitly accept
-the change; baselines are never silently overwritten.
+Lustre, and drives Chrome/odiff through the dual-target
+[`shellout`](https://hexdocs.pm/shellout/) package, so the same code runs on Node
+and on Erlang/OTP. A real regression keeps your build **red** until you
+explicitly accept the change; baselines are never silently overwritten.
 
 ## Requirements
 
@@ -17,41 +20,21 @@ the change; baselines are never silently overwritten.
 | `CHROME_BIN` | a Chrome / Chromium executable    | system Chrome, or Chrome for Testing     |
 | `ODIFF_BIN`  | the odiff executable              | `npm i -D odiff-bin` → `node_modules/.bin/odiff` |
 
-Template injection also uses the [`linkedom`](https://www.npmjs.com/package/linkedom)
-npm package.
-
 ## Install
 
 ```sh
 gleam add gleam_screenshots --dev
-npm i -D linkedom odiff-bin
+npm i -D odiff-bin
 ```
 
 > Until this is published to Hex, depend on it from git:
 > `gleam_screenshots = { git = "https://github.com/thomasdelva/gleam-screenshots", ref = "main" }`
 
-Add a template that links your real stylesheet and has a mount node, e.g.
-`test/screenshot_template.html`:
-
-```html
-<!doctype html>
-<html>
-  <head>
-    <link rel="stylesheet" href="../priv/static/app.css" />
-  </head>
-  <body>
-    <div id="app"></div>
-  </body>
-</html>
-```
-
-The `<link>` is resolved relative to the template on disk, so build your CSS
-before running the tests.
-
 ## Usage
 
-Pass any HTML string. With Lustre you stringify the view yourself; with htmx you
-pass the fragment your server renders — same call either way:
+Pass a **complete HTML document** string — inline your CSS (or reference assets
+relative to the baseline's directory). With Lustre you stringify the view
+yourself; with htmx you pass the page your server renders — same call either way:
 
 ```gleam
 import gleeunit/should
@@ -59,28 +42,32 @@ import lustre/element
 import lustre/element/html
 import screenshot
 
-const template = "test/screenshot_template.html"
-
 pub fn home_page_test() {
   let view = html.main([], [html.h1([], [element.text("Andern")])])
+  let document =
+    "<!doctype html><html><head><style>"
+    <> "body { margin: 0; font-family: sans-serif }"
+    <> "</style></head><body>"
+    <> element.to_string(view)
+    <> "</body></html>"
 
-  screenshot.matches_baseline(
-    content: element.to_string(view),
+  screenshot.document_matches_baseline(
+    document:,
     baseline: "test/screenshots/home",
-    options: screenshot.options(template:, selector: "#app")
-      |> screenshot.with_size(screenshot.desktop),
+    size: screenshot.desktop,
+    threshold: 0.1,
   )
   |> should.equal(Ok(screenshot.Match))
 }
 ```
 
 Sizes `mobile` (390×844), `tablet` (768×1024) and `desktop` (1280×800) are
-provided; build your own with `ScreenSize(width:, height:)`. For a complete HTML
-document (no template) use the lower-level `capture` + `diff` directly.
+provided; build your own with `ScreenSize(width:, height:)`. For finer control,
+`capture` (HTML → PNG) and `diff` (PNG vs PNG) are exposed directly.
 
 ## Outcomes & accepting changes
 
-`matches_baseline` returns `Ok(Match)` on a match, or — both failures, leaving a
+`document_matches_baseline` returns `Ok(Match)` on a match, or — both failures, leaving a
 proposed `*.new.png` and a `*.diff.png` next to the baseline for review —
 `Ok(Mismatch(diff:, proposed:))` when the render differs, or `Ok(Missing(proposed:))`
 when there's no baseline yet. Baselines are committed **per platform**
@@ -95,10 +82,9 @@ When a change is intentional, accept it in one step:
 ## CI
 
 There's no magic — a screenshot run is just `gleam test` with a browser and odiff
-on the runner. Write one job: set up your toolchain, install odiff (and
-`linkedom` if you use template injection), point `CHROME_BIN` / `ODIFF_BIN` at
-the binaries, and run the suite. On a regression `gleam test` exits non-zero and
-leaves `*.new.png` / `*.diff.png` for you to upload.
+on the runner. Write one job: set up your toolchain, install odiff, point
+`CHROME_BIN` / `ODIFF_BIN` at the binaries, and run the suite. On a regression
+`gleam test` exits non-zero and leaves `*.new.png` / `*.diff.png` to upload.
 
 Accepting an intentional change is the *same* job: while the `accept-screenshots`
 label is on the PR, the run goes into `SCREENSHOT_ACCEPT` mode (the library
@@ -133,7 +119,7 @@ jobs:
       - uses: browser-actions/setup-chrome@v1
         id: setup-chrome
         with: { chrome-version: "131.0.6778.204" }
-      # build the assets your template links, if any:
+      # build any assets your HTML references, if any:
       # - run: gleam run -m lustre/dev build --outdir=priv/static
       - run: gleam test
         env:
@@ -174,11 +160,8 @@ This repo dogfoods the same job via
 
 | Function | Purpose |
 | --- | --- |
-| `matches_baseline(content:, baseline:, options:)` | Render → screenshot → diff vs the platform baseline. |
-| `options(template:, selector:)` / `with_size` | Build the config for `matches_baseline`. |
+| `document_matches_baseline(document:, baseline:, size:, threshold:)` | Screenshot a complete HTML document → diff vs the platform baseline. |
 | `capture(html:, to:, size:, base:)` | Screenshot a complete HTML document to a PNG. |
-| `capture_in_template(content:, into:, at:, to:, size:)` | Inject a fragment into a template, then screenshot. |
-| `render(content:, into:, at:)` | Inject a fragment into a template, returning the combined HTML. |
 | `diff(a:, b:, to:, threshold:)` | Pixel-diff two PNGs with odiff. |
 
 ## Contributing

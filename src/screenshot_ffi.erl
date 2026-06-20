@@ -1,6 +1,6 @@
-%% Erlang FFI for `screenshot/dom` platform detection. Mirrors dom.ffi.mjs so
-%% the library detects the host OS on the BEAM as well as on Node. (Process
-%% spawning is handled by the `shellout` dependency, not here.)
+%% Erlang FFI for `screenshot`'s host-platform detection. Mirrors
+%% screenshot.ffi.mjs so the library detects the host OS on the BEAM as well as
+%% on Node. (Process spawning is handled by the `shellout` dependency, not here.)
 -module(screenshot_ffi).
 -export([platform/0]).
 

@@ -1,10 +1,11 @@
 # This repo's own CI: render the fixtures and pixel-diff them against the
-# committed baselines (the screenshot suite), plus a formatting check. There's no
-# reusable workflow to call — consumers write their own job like the one below
-# and run `gleam test`.
+# committed baselines (the screenshot suite), plus a formatting check. The suite
+# has no JavaScript-only code, so it runs on BOTH targets (Erlang + JavaScript) —
+# the library's own dual-target proof. There's no reusable workflow to call;
+# consumers write their own job like the one below and run `gleam test`.
 #
 # Accepting is folded into the same job: while the `accept-screenshots` label is
-# on the PR, the run goes into SCREENSHOT_ACCEPT mode (the library refreshes any
+# on the PR, the runs go into SCREENSHOT_ACCEPT mode (the library refreshes any
 # baseline that drifted past the threshold) and the commit step pushes the
 # result back. The label stays until removed, so every push keeps adopting. The
 # regular run needs none of that — `gleam test` alone is the compare.
@@ -22,6 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # accept mode pushes the refreshed baselines
+    env:
+      # Accept mode (refresh the baselines) whenever the label is on the PR;
+      # otherwise the runs are the compare. Shared by both target steps.
+      SCREENSHOT_ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
+      ODIFF_BIN: node_modules/.bin/odiff
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,21 +41,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # JS peer deps: odiff-bin (the diff binary) + linkedom (template injection),
-      # both in package.json.
+      # Only JS peer dep is the odiff binary (no linkedom anymore).
       - run: npm ci
       - run: gleam deps download
       - uses: browser-actions/setup-chrome@v1
         id: setup-chrome
         with:
           chrome-version: "131.0.6778.204"
-      # Accept mode (refresh the baselines) whenever the label is on the PR;
-      # otherwise this run is the compare.
-      - run: gleam test
+      # Run the suite on both targets — the library is fully dual-target.
+      - name: Screenshot tests (Erlang)
+        run: gleam test --target erlang
         env:
-          SCREENSHOT_ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-          ODIFF_BIN: node_modules/.bin/odiff
+      - name: Screenshot tests (JavaScript)
+        run: gleam test --target javascript
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
       - name: Commit accepted baselines
         if: ${{ success() && contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
         run: |
