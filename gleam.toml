@@ -1,8 +1,11 @@
 name = "gleam_screenshots"
 version = "1.0.0"
-target = "javascript"
+# The library and its test suite are fully dual-target — it shells out to Chrome
+# and odiff through `shellout` (which spawns directly on both Node and the BEAM),
+# with no JavaScript-only code. CI runs `gleam test` on both targets; there's no
+# `target` default to pin.
 
-description = "Screenshot regression testing for Gleam web UIs on the JavaScript target. Renders raw HTML with headless Chrome and pixel-diffs against committed baselines."
+description = "Screenshot regression testing for Gleam web UIs, on the JavaScript target or the BEAM. Renders raw HTML with headless Chrome and pixel-diffs against committed baselines."
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "thomasdelva", repo = "gleam-screenshots" }
 links = [{ title = "Website", href = "https://github.com/thomasdelva/gleam-screenshots" }]
@@ -10,12 +13,13 @@ links = [{ title = "Website", href = "https://github.com/thomasdelva/gleam-scree
 # Library code (src/) deliberately does NOT depend on Lustre — it works with
 # any view layer that can produce an HTML string (Lustre, htmx, hand-written
 # templates...). Lustre is only a dev-dependency, used by the example test to
-# demonstrate `lustre/element.to_string` interop.
+# demonstrate `lustre/element.to_string` interop. Process spawning uses
+# `shellout`, a small dual-target package, so the library compiles on Erlang too.
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 envoy = ">= 1.2.0 and < 2.0.0"
 simplifile = ">= 2.4.0 and < 3.0.0"
-child_process = ">= 2.1.1 and < 3.0.0"
+shellout = ">= 1.8.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

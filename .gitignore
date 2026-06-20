@@ -4,10 +4,10 @@
 erl_crash.dump
 node_modules/
 
-# Local env (copy from .envrc.example)
+# Local env (direnv)
 .envrc
 
-# Scratch render files written next to templates during a screenshot run.
+# Scratch render files written during a screenshot run.
 .screenshot_render.*.html
 
 # Proposed screenshots + visual diffs produced on a mismatch. Baselines

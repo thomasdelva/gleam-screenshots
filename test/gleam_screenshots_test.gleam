@@ -2,10 +2,11 @@
 //// documentation: the screenshot tests exercise common CSS features across the
 //// mobile, tablet and desktop screen sizes — flexbox, CSS grid, gradients and
 //// borders, text wrapping/reflow, and media-query layout — and show both the
-//// raw-HTML and the (optional) Lustre entry points.
+//// raw-HTML and the (optional) Lustre entry points. The same suite runs on the
+//// JavaScript target and on the BEAM.
 ////
 //// Screenshot tests are skipped unless `CHROME_BIN` and `ODIFF_BIN` are set,
-//// so `gleam test` still runs the pure tests on a machine without a browser.
+//// so `gleam test` still runs on a machine without a browser.
 
 import envoy
 import gleam/list
@@ -16,43 +17,10 @@ import lustre/attribute
 import lustre/element
 import lustre/element/html
 import screenshot
+import simplifile
 
 pub fn main() {
   gleeunit.main()
-}
-
-const template = "test/fixtures/template.html"
-
-const selector = "#app"
-
-// MARK: Pure tests (no browser required)
-
-pub fn render_injects_content_test() {
-  let assert Ok(combined) =
-    screenshot.render(
-      content: "<p class=\"hi\">hello</p>",
-      into: template,
-      at: selector,
-    )
-
-  // The fragment lands inside the mount node, and the template chrome
-  // (its stylesheet link) is preserved.
-  should.be_true(string.contains(combined, "<p class=\"hi\">hello</p>"))
-  should.be_true(string.contains(combined, "styles.css"))
-}
-
-pub fn render_unknown_selector_is_an_error_test() {
-  screenshot.render(content: "<p></p>", into: template, at: "#does-not-exist")
-  |> should.equal(Error(screenshot.SelectorNotFound("#does-not-exist")))
-}
-
-pub fn render_missing_template_is_an_error_test() {
-  screenshot.render(
-    content: "<p></p>",
-    into: "test/fixtures/nope.html",
-    at: selector,
-  )
-  |> should.equal(Error(screenshot.TemplateNotFound("test/fixtures/nope.html")))
 }
 
 // MARK: Screenshot regression tests (need CHROME_BIN + ODIFF_BIN)
@@ -153,12 +121,30 @@ pub fn lustre_element_test() {
 
 // MARK: Helpers
 
+/// Wrap a fragment in a complete HTML document with the fixture stylesheet
+/// inlined, so the render is self-contained — the document path the library
+/// exposes on every target.
+fn document(content: String) -> String {
+  let assert Ok(css) = simplifile.read("test/fixtures/styles.css")
+  "<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"UTF-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+    <style>" <> css <> "</style>
+  </head>
+  <body>
+    <div id=\"app\">" <> content <> "</div>
+  </body>
+</html>"
+}
+
 fn matches(name: String, content: String, size: screenshot.ScreenSize) -> Nil {
-  screenshot.matches_baseline(
-    content:,
+  screenshot.document_matches_baseline(
+    document: document(content),
     baseline: "test/screenshots/" <> name,
-    options: screenshot.options(template:, selector:)
-      |> screenshot.with_size(size),
+    size:,
+    threshold: 0.1,
   )
   |> should.equal(Ok(screenshot.Match))
 }

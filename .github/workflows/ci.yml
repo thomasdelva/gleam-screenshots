@@ -1,5 +1,14 @@
-# This repo's own CI: dogfoods the reusable screenshots workflow with defaults
-# (the test fixtures link a committed stylesheet, so no asset build is needed).
+# This repo's own CI: render the fixtures and pixel-diff them against the
+# committed baselines (the screenshot suite), plus a formatting check. The suite
+# has no JavaScript-only code, so it runs on BOTH targets (Erlang + JavaScript) —
+# the library's own dual-target proof. There's no reusable workflow to call;
+# consumers write their own job like the one below and run `gleam test`.
+#
+# Accepting is folded into the same job: while the `accept-screenshots` label is
+# on the PR, the runs go into SCREENSHOT_ACCEPT mode (the library refreshes any
+# baseline that drifted past the threshold) and the commit step pushes the
+# result back. The label stays until removed, so every push keeps adopting. The
+# regular run needs none of that — `gleam test` alone is the compare.
 
 name: ci
 
@@ -7,7 +16,75 @@ on:
   push:
     branches: [main, master]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
 
 jobs:
   screenshots:
-    uses: ./.github/workflows/screenshots.yml
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # accept mode pushes the refreshed baselines
+    env:
+      # Accept mode (refresh the baselines) whenever the label is on the PR;
+      # otherwise the runs are the compare. Shared by both target steps.
+      SCREENSHOT_ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
+      ODIFF_BIN: node_modules/.bin/odiff
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Head branch (not the merge commit), so accept mode can push back to it.
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.14.0"
+          rebar3-version: "3"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The only JS peer dependency is the odiff binary.
+      - run: npm ci
+      - run: gleam deps download
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: "131.0.6778.204"
+      # Run the suite on both targets — the library is fully dual-target.
+      - name: Screenshot tests (Erlang)
+        run: gleam test --target erlang
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+      - name: Screenshot tests (JavaScript)
+        run: gleam test --target javascript
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+      - name: Commit accepted baselines
+        if: ${{ success() && env.SCREENSHOT_ACCEPT == 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- test/screenshots
+          if ! git diff --cached --quiet; then
+            git commit -m "Accept updated screenshots"
+            git push origin "HEAD:${{ github.head_ref }}"
+          fi
+      - name: Upload proposed screenshots and diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-proposals
+          path: |
+            **/*.new.png
+            **/*.diff.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.14.0"
+          rebar3-version: "3"
+      - run: gleam format --check src test
