@@ -1,5 +1,6 @@
 # This repo's own CI: dogfoods the reusable screenshots workflow with defaults
-# (the test fixtures link a committed stylesheet, so no asset build is needed).
+# (the test fixtures link a committed stylesheet, so no asset build is needed),
+# plus the code-quality checks that don't belong in the reusable workflow.
 
 name: ci
 
@@ -11,3 +12,16 @@ on:
 jobs:
   screenshots:
     uses: ./.github/workflows/screenshots.yml
+
+  # Formatting lives here, not in the reusable workflow, so consumers aren't
+  # forced to adopt this repo's formatting just to run their screenshot tests.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.14.0"
+          rebar3-version: "3"
+      - run: gleam format --check src test

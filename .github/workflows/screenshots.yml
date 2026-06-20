@@ -22,6 +22,15 @@
 #
 # `accept` defaults to false, so a normal call never pushes and needs no
 # permissions. The commit/label steps below are simply skipped unless accept is on.
+#
+# JS deps default to `npm ci` (a committed package.json + lockfile). A project
+# without one — e.g. a BEAM app whose screenshot tests only need the odiff binary
+# — overrides that:
+#       with:
+#         npm-install: npm install --no-save odiff-bin
+#
+# This workflow does screenshots (and one-click accept) only; keep other CI
+# concerns (formatting, unit tests, type checks) in your own workflows.
 
 name: screenshots
 
@@ -41,6 +50,10 @@ on:
       node-version:
         type: string
         default: "22"
+      npm-install:
+        description: "Command to install the JS peer deps the library shells out to: odiff-bin (always) and linkedom (only for template injection). The default assumes a committed package.json + lockfile; a project without one can pass e.g. 'npm install --no-save odiff-bin'."
+        type: string
+        default: "npm ci"
       chrome-version:
         type: string
         default: "131.0.6778.204"
@@ -72,13 +85,12 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
 
-      # Installs the JS peer deps the library shells out to: odiff-bin (the diff
-      # binary) and linkedom (template injection). Put both in package.json.
-      - run: npm ci
+      # Install the JS peer deps the library shells out to (odiff-bin, and
+      # linkedom for template injection). Configurable via `npm-install` so a
+      # project without a package.json can install them directly.
+      - run: ${{ inputs.npm-install }}
 
       - run: gleam deps download
-
-      - run: gleam format --check src test
 
       - uses: browser-actions/setup-chrome@v1
         id: setup-chrome
