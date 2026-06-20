@@ -70,6 +70,41 @@ and a plain `git` step commits whatever the library refreshed (see
 `.github/workflows/ci.yml`). That push uses `GITHUB_TOKEN`, which does not
 re-trigger workflows, so it can't loop; remove the label to re-arm the compare.
 
+## Consuming this library elsewhere (agent pitfalls)
+
+For *using* the API, the README is enough. These are the non-obvious traps an
+agent hits when wiring the library into another project's test suite — learned
+the hard way integrating it into `andern-lustre`:
+
+- **Relative asset paths resolve from the *baseline's* directory, not the repo
+  root or your test file.** `document_matches_baseline` writes its scratch render
+  next to the proposal (`directory_of(<baseline>.<platform>.new.png)`), and Chrome
+  loads that over `file://`. So a `<link href>` / `<img src>` in your document is
+  relative to e.g. `test/screenshots/` — repo-root `priv/static/app.css` becomes
+  `../../priv/static/app.css`. Get it wrong and the page just renders unstyled;
+  nothing errors, and the baseline silently bakes in the broken render.
+- **A consumer's `gleam test` *fails* (not skips) without `CHROME_BIN`/`ODIFF_BIN`.**
+  The API returns `Error(MissingBinary)` and an assertion like
+  `should.equal(Ok(Match))` reddens. Because gleeunit runs the whole module set in
+  one process, a browserless run fails the *entire* suite, not just the screenshot
+  test — so you can't keep a separate browser-free CI job (or expect plain local
+  `gleam test` to pass) unless you set both binaries everywhere or guard the test
+  yourself. (This repo's *own* suite guards/skips; downstream tests don't inherit
+  that.) Prefer one `gleam test` invocation that always has the browser env.
+- **Git dependency wiring.** `gleam.toml` needs
+  `{ git = "...", ref = "<commit>" }` (pin a commit, not a branch, for
+  reproducible CI). The `manifest.toml` entry is `source = "git"`, `repo = "..."`,
+  `commit = "..."` (no `outer_checksum`), and pulling the lib adds its transitive
+  deps — `shellout`, and it may bump `envoy`/`simplifile`. Let `gleam deps
+  download` re-resolve the lockfile; if hex is unreachable in your sandbox, copy
+  the transitive entries (with checksums) out of this repo's `manifest.toml`.
+- **First run has no baseline → `Missing` → red, by design.** Don't commit a
+  hand-made baseline to make CI green. Bootstrap with `SCREENSHOT_ACCEPT=true`
+  (or the `accept-screenshots` label) so the *real* render becomes the baseline.
+- **Build the assets the document references before `gleam test`** — including in
+  CI — since the render is `file://` with no build step. Missing CSS doesn't fail;
+  it silently produces an unstyled baseline.
+
 ## Layout & conventions
 
 | Path | Role |
