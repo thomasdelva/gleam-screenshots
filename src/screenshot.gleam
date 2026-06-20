@@ -289,7 +289,7 @@ fn check_baseline(
   threshold: Float,
   capture_to: fn(String) -> Result(Nil, Error),
 ) -> Result(Outcome, Error) {
-  let plat = dom.platform()
+  let plat = exec.platform()
   let golden = baseline <> "." <> plat <> ".png"
   let proposed = baseline <> "." <> plat <> ".new.png"
   let diff_path = baseline <> "." <> plat <> ".diff.png"

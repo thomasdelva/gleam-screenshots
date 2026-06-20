@@ -11,3 +11,9 @@ export function run(executable, args) {
   const output = (result.stdout ?? "") + (result.stderr ?? "");
   return [result.status ?? -1, output];
 }
+
+// The host platform, as Node's `process.platform` reports it ("linux",
+// "darwin", "win32", ...). Mirrored by screenshot_ffi:platform/0 on the BEAM.
+export function platform() {
+  return process.platform;
+}

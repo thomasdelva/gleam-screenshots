@@ -1,30 +1,15 @@
-name: Accept gleam screenshots
+name: Commit accepted screenshots
 description: >-
-  Refresh the committed screenshot baselines and push them back, then drop the
-  trigger label. Re-renders in SCREENSHOT_ACCEPT mode, so this is the one-click
-  way to adopt an intentional UI change. Drop it into a job that has already
-  checked out the branch and set up your toolchain (gleam, a browser, odiff);
-  this action only does the accept-and-push part.
+  Commit the refreshed screenshot baselines and push them back, then drop the
+  trigger label. Use it as a label-gated step right after a SCREENSHOT_ACCEPT
+  run of `gleam test` has re-rendered the baselines — this action just does the
+  commit-push-and-unlabel part. The job must check out the head branch and grant
+  `contents: write` + `pull-requests: write`.
 
 inputs:
-  chrome-bin:
-    description: "Path to the Chrome/Chromium binary (e.g. the setup-chrome output)."
-    required: true
-  odiff-bin:
-    description: "Path to the odiff binary (e.g. node_modules/.bin/odiff)."
-    required: true
-  run:
-    description: "Command that runs the screenshot tests."
-    default: "gleam test"
   paths:
     description: "Pathspec of baselines to stage for the accept commit."
     default: "."
-  branch:
-    description: "Branch to push refreshed baselines to. Defaults to the PR head branch."
-    default: ""
-  commit-message:
-    description: "Commit message for the refreshed baselines."
-    default: "Accept updated screenshots"
   label:
     description: "Label to remove after accepting. Empty to skip."
     default: "accept-screenshots"
@@ -32,29 +17,17 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Re-render baselines (accept mode)
-      shell: bash
-      env:
-        SCREENSHOT_ACCEPT: "true"
-        CHROME_BIN: ${{ inputs.chrome-bin }}
-        ODIFF_BIN: ${{ inputs.odiff-bin }}
-      run: ${{ inputs.run }}
-
     - name: Commit and push refreshed baselines
       shell: bash
-      env:
-        COMMIT_MESSAGE: ${{ inputs.commit-message }}
       run: |
-        branch="${{ inputs.branch }}"
-        [ -n "$branch" ] || branch="${{ github.head_ref || github.ref_name }}"
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add -A -- ${{ inputs.paths }}
         if git diff --cached --quiet; then
           echo "No baseline changes to accept."
         else
-          git commit -m "$COMMIT_MESSAGE"
-          git push origin "HEAD:$branch"
+          git commit -m "Accept updated screenshots"
+          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
         fi
 
     - name: Remove the accept label

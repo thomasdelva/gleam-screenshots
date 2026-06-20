@@ -58,22 +58,22 @@ SCREENSHOT_ACCEPT=true gleam test     # adopt current renders as baselines, then
 
 Only commit baselines for the platform you actually rendered on — do not
 hand-edit or overwrite another platform's `*.png`. In CI, accepting is a
-one-click `accept-screenshots` label (see `.github/workflows/accept.yml`). The
-accept job pushes with `GITHUB_TOKEN`, which does not re-trigger workflows, so
-re-run the regression check afterwards (or wire a PAT push) to refresh its
-status.
+one-click `accept-screenshots` label that re-runs the screenshots job in accept
+mode (see `.github/workflows/ci.yml`). That push uses `GITHUB_TOKEN`, which does
+not re-trigger workflows, so re-run the regression check afterwards (or wire a
+PAT push) to refresh its status.
 
 ## Layout & conventions
 
 | Path | Role |
 | --- | --- |
 | `src/screenshot.gleam` | Public API: `capture`, `document_matches_baseline` (any target), `capture_in_template`, `render`, `matches_baseline` (JS-only template path), `diff`. |
-| `src/screenshot/exec.gleam` + `exec.ffi.mjs` + `src/screenshot_ffi.erl` | Per-target FFI for running an executable (Chrome, odiff) — Node `spawnSync` / an Erlang port — so the library runs on both targets. `screenshot_ffi.erl` also provides `platform/0`. |
-| `src/screenshot/dom.gleam` + `dom.ffi.mjs` | JS-only FFI: template injection (linkedom) + platform detection. |
+| `src/screenshot/exec.gleam` + `exec.ffi.mjs` + `src/screenshot_ffi.erl` | OS-facing per-target FFI so the library runs on both targets: `run` (an executable — Chrome, odiff — via Node `spawnSync` / an Erlang port) and `platform`. |
+| `src/screenshot/dom.gleam` + `dom.ffi.mjs` | JS-only FFI: template injection (linkedom). |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/` | `template.html` + `styles.css` the tests render. |
-| `accept/action.yml` | Composite action consumers drop into their own accept job: re-render in accept mode, commit + push baselines, drop the label. |
-| `.github/workflows/ci.yml`, `accept.yml` | This repo's own self-contained CI (screenshots + format) and label-gated accept that dogfoods the `accept` action. |
+| `accept/action.yml` | Composite action for the accept step: after a `SCREENSHOT_ACCEPT` run, commit + push the refreshed baselines and drop the label. |
+| `.github/workflows/ci.yml` | This repo's own self-contained CI (screenshots + format); the screenshots job folds in the label-gated accept, dogfooding the `accept` action. |
 
 - **Keep `src/` free of Lustre.** Lustre is a dev-dependency only (used by one
   example test); the library must stay view-layer agnostic and operate on HTML

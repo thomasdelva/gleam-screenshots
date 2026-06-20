@@ -10,7 +10,3 @@ export function mount_into_template(template_html, selector, content_html) {
   target.innerHTML = content_html;
   return new Ok(document.toString());
 }
-
-export function platform() {
-  return process.platform;
-}

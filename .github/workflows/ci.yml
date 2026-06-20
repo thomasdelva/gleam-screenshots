@@ -1,8 +1,12 @@
 # This repo's own CI: render the fixtures and pixel-diff them against the
 # committed baselines (the screenshot suite), plus a formatting check. There's no
 # reusable workflow to call — consumers write their own job like the one below
-# and run `gleam test`; the only library-provided CI helper is the composite
-# `accept` action (see accept.yml).
+# and run `gleam test`.
+#
+# Accepting is folded in as a label-gated tail of the same job: adding the
+# `accept-screenshots` label re-runs the suite in SCREENSHOT_ACCEPT mode and the
+# composite `accept` action commits + pushes the refreshed baselines. The
+# regular run needs none of that — `gleam test` alone is the compare.
 
 name: ci
 
@@ -10,12 +14,19 @@ on:
   push:
     branches: [main, master]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
 
 jobs:
   screenshots:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # accept mode pushes the refreshed baselines
+      pull-requests: write # accept mode drops the label
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Head branch (not the merge commit), so accept mode can push back to it.
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27.1.2"
@@ -32,10 +43,16 @@ jobs:
         id: setup-chrome
         with:
           chrome-version: "131.0.6778.204"
+      # SCREENSHOT_ACCEPT is true only on the accept-screenshots label, which
+      # turns this run into a baseline refresh; otherwise it's the compare.
       - run: gleam test
         env:
+          SCREENSHOT_ACCEPT: ${{ github.event.label.name == 'accept-screenshots' }}
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           ODIFF_BIN: node_modules/.bin/odiff
+      - name: Commit accepted baselines
+        if: ${{ success() && github.event.label.name == 'accept-screenshots' }}
+        uses: ./accept
       - name: Upload proposed screenshots and diffs
         if: failure()
         uses: actions/upload-artifact@v4
