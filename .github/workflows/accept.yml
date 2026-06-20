@@ -1,6 +1,7 @@
-# This repo's own one-click accept: dogfoods the reusable workflow in accept
-# mode. Add the `accept-screenshots` label to a PR (or run manually) to refresh
-# the committed Linux baselines and push them back.
+# This repo's own one-click accept: dogfoods the composite `accept` action. Add
+# the `accept-screenshots` label to a PR (or run manually) to refresh the
+# committed Linux baselines and push them back. Sets up the same toolchain as
+# ci.yml, then hands off to the action for the re-render + commit + push.
 
 name: accept
 
@@ -12,9 +13,30 @@ on:
 jobs:
   accept:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'accept-screenshots'
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-    uses: ./.github/workflows/screenshots.yml
-    with:
-      accept: true
+      contents: write # push the refreshed baselines
+      pull-requests: write # drop the label afterwards
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The PR's head branch, so accept mode can push baselines back to it.
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.14.0"
+          rebar3-version: "3"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: gleam deps download
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: "131.0.6778.204"
+      - uses: ./accept
+        with:
+          chrome-bin: ${{ steps.setup-chrome.outputs.chrome-path }}
+          odiff-bin: node_modules/.bin/odiff

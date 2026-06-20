@@ -1,6 +1,8 @@
-# This repo's own CI: dogfoods the reusable screenshots workflow with defaults
-# (the test fixtures link a committed stylesheet, so no asset build is needed),
-# plus the code-quality checks that don't belong in the reusable workflow.
+# This repo's own CI: render the fixtures and pixel-diff them against the
+# committed baselines (the screenshot suite), plus a formatting check. There's no
+# reusable workflow to call — consumers write their own job like the one below
+# and run `gleam test`; the only library-provided CI helper is the composite
+# `accept` action (see accept.yml).
 
 name: ci
 
@@ -11,10 +13,40 @@ on:
 
 jobs:
   screenshots:
-    uses: ./.github/workflows/screenshots.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.14.0"
+          rebar3-version: "3"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # JS peer deps: odiff-bin (the diff binary) + linkedom (template injection),
+      # both in package.json.
+      - run: npm ci
+      - run: gleam deps download
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: "131.0.6778.204"
+      - run: gleam test
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          ODIFF_BIN: node_modules/.bin/odiff
+      - name: Upload proposed screenshots and diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-proposals
+          path: |
+            **/*.new.png
+            **/*.diff.png
+          if-no-files-found: ignore
+          retention-days: 14
 
-  # Formatting lives here, not in the reusable workflow, so consumers aren't
-  # forced to adopt this repo's formatting just to run their screenshot tests.
   format:
     runs-on: ubuntu-latest
     steps:

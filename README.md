@@ -93,8 +93,11 @@ When a change is intentional, accept it in one step:
 
 ## CI
 
-The workflows are **reusable** — reference them with `uses:`, no copy-paste. Add
-a caller to your repo's `.github/workflows/`:
+There's no magic — a screenshot run is just `gleam test` with a browser and odiff
+on the runner. Write a normal job: set up your toolchain, install odiff (and
+`linkedom` if you use template injection), point `CHROME_BIN` / `ODIFF_BIN` at
+the binaries, and run the suite. On a regression `gleam test` exits non-zero and
+leaves `*.new.png` / `*.diff.png` for you to upload.
 
 ```yaml
 # .github/workflows/screenshots.yml
@@ -105,48 +108,82 @@ on:
     branches: [main]
 jobs:
   screenshots:
-    uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots.yml@main
-    with:
-      # command that builds the assets your template links — omit if none
-      build-command: gleam run -m lustre/dev build --outdir=priv/static
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with: { otp-version: "27.1.2", gleam-version: "1.14.0", rebar3-version: "3" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci # or: npm install --no-save odiff-bin
+      - run: gleam deps download
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with: { chrome-version: "131.0.6778.204" }
+      # build the assets your template links, if any:
+      # - run: gleam run -m lustre/dev build --outdir=priv/static
+      - run: gleam test
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          ODIFF_BIN: node_modules/.bin/odiff
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-proposals
+          path: |
+            **/*.new.png
+            **/*.diff.png
+          if-no-files-found: ignore
 ```
 
-On a regression it **fails the build** and uploads the proposals + diffs as an
-artifact; it never overwrites the baseline. For the **one-click accept**, add a
-second caller of the same workflow with `accept: true`, gated on a label and
-granted write access:
+For the **one-click accept**, add a second, label-gated job that reuses the same
+setup and then calls the composite **`accept` action** — it re-renders in
+`SCREENSHOT_ACCEPT` mode, commits the refreshed baselines, pushes them back, and
+drops the label:
 
 ```yaml
 # .github/workflows/screenshots-accept.yml
 name: screenshots-accept
 on:
+  workflow_dispatch:
   pull_request:
     types: [labeled]
 jobs:
   accept:
-    if: github.event.label.name == 'accept-screenshots'
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'accept-screenshots'
+    runs-on: ubuntu-latest
     permissions:
-      contents: write       # push the refreshed baselines
-      pull-requests: write  # drop the label afterwards
-    uses: thomasdelva/gleam-screenshots/.github/workflows/screenshots.yml@main
-    with:
-      accept: true
-      build-command: gleam run -m lustre/dev build --outdir=priv/static
+      contents: write # push the refreshed baselines
+      pull-requests: write # drop the label afterwards
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: ${{ github.head_ref || github.ref_name }} }
+      - uses: erlef/setup-beam@v1
+        with: { otp-version: "27.1.2", gleam-version: "1.14.0", rebar3-version: "3" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci # or: npm install --no-save odiff-bin
+      - run: gleam deps download
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with: { chrome-version: "131.0.6778.204" }
+      - uses: thomasdelva/gleam-screenshots/accept@main
+        with:
+          chrome-bin: ${{ steps.setup-chrome.outputs.chrome-path }}
+          odiff-bin: node_modules/.bin/odiff
+          # paths: test/screenshots   # scope the accept commit, if you like
 ```
 
-`accept` defaults to `false`, so the regular caller never pushes and needs no
-permissions. Create the `accept-screenshots` label once; adding it to a PR
-refreshes the baselines on the branch. The workflow also takes optional
-`gleam-version`, `otp-version`, `node-version`, `chrome-version`, and
-`threshold` (loosen odiff's per-pixel tolerance for the whole run, e.g. `0.2`)
-inputs. This repo dogfoods both callers via [`.github/workflows/`](.github/workflows/).
+Create the `accept-screenshots` label once; adding it to a PR refreshes the
+baselines on the branch. This repo dogfoods both jobs via
+[`.github/workflows/`](.github/workflows/).
 
-> **After accepting, re-run the regression check.** The accept job pushes with
+> **After accepting, re-run the regression check.** The accept action pushes with
 > the default `GITHUB_TOKEN`, and GitHub does not trigger new workflow runs from
 > `GITHUB_TOKEN` pushes, so the regression check won't re-run itself — re-run it
 > from the Actions tab (the accept commit is already correct). To make it
-> self-heal to green automatically, push from the accept job with a PAT
-> (`actions/checkout` with a `token:` secret) instead.
+> self-heal to green automatically, check out with a PAT (`token:`) so the push
+> is attributed to a user.
 
 ## API
 

@@ -36,7 +36,7 @@ gleam test
   `SCREENSHOT_HEADLESS=new` only if your Chrome dropped old headless — and
   regenerate baselines if you do.
 - `SCREENSHOT_THRESHOLD=0.2` loosens odiff's per-pixel tolerance for the whole
-  run (default `0.1`); the `threshold` workflow input sets it in CI.
+  run (default `0.1`); set it as a job `env` in CI.
 
 ## Baselines
 
@@ -67,12 +67,13 @@ status.
 
 | Path | Role |
 | --- | --- |
-| `src/screenshot.gleam` | Public API: `capture`, `capture_in_template`, `render`, `diff`, `matches_baseline`. |
-| `src/screenshot/dom.gleam` + `dom.ffi.mjs` | FFI: template injection (linkedom) + platform detection. |
+| `src/screenshot.gleam` | Public API: `capture`, `document_matches_baseline` (any target), `capture_in_template`, `render`, `matches_baseline` (JS-only template path), `diff`. |
+| `src/screenshot/exec.gleam` + `exec.ffi.mjs` + `src/screenshot_ffi.erl` | Per-target FFI for running an executable (Chrome, odiff) — Node `spawnSync` / an Erlang port — so the library runs on both targets. `screenshot_ffi.erl` also provides `platform/0`. |
+| `src/screenshot/dom.gleam` + `dom.ffi.mjs` | JS-only FFI: template injection (linkedom) + platform detection. |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/` | `template.html` + `styles.css` the tests render. |
-| `.github/workflows/screenshots.yml` | Reusable (`workflow_call`) workflow consumers reference with `uses:`; `accept: true` switches it from compare to refresh-and-push. |
-| `.github/workflows/ci.yml`, `accept.yml` | This repo's own thin callers that dogfood it (regular run + label-gated accept). |
+| `accept/action.yml` | Composite action consumers drop into their own accept job: re-render in accept mode, commit + push baselines, drop the label. |
+| `.github/workflows/ci.yml`, `accept.yml` | This repo's own self-contained CI (screenshots + format) and label-gated accept that dogfoods the `accept` action. |
 
 - **Keep `src/` free of Lustre.** Lustre is a dev-dependency only (used by one
   example test); the library must stay view-layer agnostic and operate on HTML
