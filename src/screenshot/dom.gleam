@@ -1,7 +1,7 @@
-//// JavaScript-only FFI for `screenshot`: HTML template injection via the
-//// `linkedom` npm package. Kept separate so the public `screenshot` module has
-//// a single, documented JS dependency. (Platform detection — needed on both
-//// targets — lives in `screenshot/exec`.)
+//// Small FFI surface used by `screenshot`: HTML template injection (via the
+//// `linkedom` npm package, JavaScript-only) and host platform detection (both
+//// targets). Kept separate so the public `screenshot` module has a single,
+//// documented JS dependency.
 
 @target(javascript)
 /// Parse `template` as HTML, find the first element matching the CSS
@@ -20,3 +20,12 @@ pub fn mount_into_template(
   selector selector: String,
   content content: String,
 ) -> Result(String, String)
+
+/// The host platform, as Node's `process.platform` reports it: `"linux"`,
+/// `"darwin"`, `"win32"`, etc. Used to keep a separate screenshot baseline per
+/// platform, because pixel rendering differs across rasterisation stacks
+/// (FreeType vs CoreText vs DirectWrite). Dual-target — the render is by the
+/// same Chrome regardless of which runtime drove the capture.
+@external(erlang, "screenshot_ffi", "platform")
+@external(javascript, "./dom.ffi.mjs", "platform")
+pub fn platform() -> String

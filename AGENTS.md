@@ -68,8 +68,8 @@ PAT push) to refresh its status.
 | Path | Role |
 | --- | --- |
 | `src/screenshot.gleam` | Public API: `capture`, `document_matches_baseline` (any target), `capture_in_template`, `render`, `matches_baseline` (JS-only template path), `diff`. |
-| `src/screenshot/exec.gleam` + `exec.ffi.mjs` + `src/screenshot_ffi.erl` | OS-facing per-target FFI so the library runs on both targets: `run` (an executable — Chrome, odiff — via Node `spawnSync` / an Erlang port) and `platform`. |
-| `src/screenshot/dom.gleam` + `dom.ffi.mjs` | JS-only FFI: template injection (linkedom). |
+| `src/screenshot/exec.gleam` + `exec.ffi.mjs` + `src/screenshot_ffi.erl` | Per-target FFI for running an executable (Chrome, odiff) — Node `spawnSync` / an Erlang port — so the library runs on both targets. `screenshot_ffi.erl` also backs `dom.platform`. |
+| `src/screenshot/dom.gleam` + `dom.ffi.mjs` | FFI: template injection (linkedom, JS-only) + host platform detection (both targets). |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/` | `template.html` + `styles.css` the tests render. |
 | `accept/action.yml` | Composite action for the accept step: after a `SCREENSHOT_ACCEPT` run, commit + push the refreshed baselines and drop the label. |

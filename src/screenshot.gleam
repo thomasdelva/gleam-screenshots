@@ -42,9 +42,10 @@
 //// overwrites the baseline itself.
 ////
 //// To accept intentional changes, re-run the suite with `SCREENSHOT_ACCEPT=true`
-//// (`SCREENSHOT_ACCEPT=true gleam test`): every baseline is refreshed from the
-//// current render and the suite passes. That single command is what the
-//// one-click CI accept job runs.
+//// (`SCREENSHOT_ACCEPT=true gleam test`): every baseline that has drifted past
+//// the threshold (or is missing) is refreshed from the current render and the
+//// suite passes — unchanged baselines are left alone. That single command is
+//// what the one-click CI accept job runs.
 
 import envoy
 import gleam/float
@@ -289,7 +290,7 @@ fn check_baseline(
   threshold: Float,
   capture_to: fn(String) -> Result(Nil, Error),
 ) -> Result(Outcome, Error) {
-  let plat = exec.platform()
+  let plat = dom.platform()
   let golden = baseline <> "." <> plat <> ".png"
   let proposed = baseline <> "." <> plat <> ".new.png"
   let diff_path = baseline <> "." <> plat <> ".diff.png"
@@ -297,46 +298,60 @@ fn check_baseline(
   let _ = simplifile.create_directory_all(directory_of(proposed))
   use _ <- result.try(capture_to(proposed))
 
-  case accepting() {
-    // One-click accept mode (`SCREENSHOT_ACCEPT=true`): adopt the current
-    // render as the baseline and pass. Re-running the suite once in this mode
-    // refreshes every baseline — the basis of the one-click CI accept job.
-    True -> {
-      use _ <- result.try(
-        simplifile.copy_file(at: proposed, to: golden)
-        |> result.replace_error(WriteFailed(golden)),
-      )
-      let _ = simplifile.delete(proposed)
-      let _ = simplifile.delete(diff_path)
-      Ok(Match)
-    }
-    False ->
-      case simplifile.is_file(golden) {
-        Ok(True) -> {
-          use matched <- result.try(diff(
-            a: golden,
-            b: proposed,
-            to: diff_path,
-            threshold: threshold_for(threshold),
-          ))
-          case matched {
-            True -> {
-              // A clean run leaves no proposal/diff lying around.
-              let _ = simplifile.delete(proposed)
-              let _ = simplifile.delete(diff_path)
-              Ok(Match)
-            }
-            False -> Ok(Mismatch(diff: diff_path, proposed:))
-          }
+  case simplifile.is_file(golden) {
+    Ok(True) -> {
+      use matched <- result.try(diff(
+        a: golden,
+        b: proposed,
+        to: diff_path,
+        threshold: threshold_for(threshold),
+      ))
+      case matched, accepting() {
+        // Within threshold: the render still matches the baseline (in either
+        // mode). Leave the baseline untouched, clean up, pass.
+        True, _ -> {
+          let _ = simplifile.delete(proposed)
+          let _ = simplifile.delete(diff_path)
+          Ok(Match)
         }
-        _ -> Ok(Missing(proposed:))
+        // Exceeds the threshold in accept mode: adopt the new render as the
+        // baseline and pass. Only changed baselines are rewritten, so an accept
+        // run produces a commit only for what actually moved.
+        False, True -> {
+          use _ <- result.try(adopt(proposed:, golden:))
+          let _ = simplifile.delete(diff_path)
+          Ok(Match)
+        }
+        // Exceeds the threshold in compare mode: a regression.
+        False, False -> Ok(Mismatch(diff: diff_path, proposed:))
+      }
+    }
+    // No baseline yet: accept mode creates it; otherwise report it missing.
+    _ ->
+      case accepting() {
+        True -> {
+          use _ <- result.try(adopt(proposed:, golden:))
+          Ok(Match)
+        }
+        False -> Ok(Missing(proposed:))
       }
   }
 }
 
+/// Adopt a proposed render as the committed baseline: move it onto `golden` and
+/// drop the proposal.
+fn adopt(proposed proposed: String, golden golden: String) -> Result(Nil, Error) {
+  use _ <- result.try(
+    simplifile.copy_file(at: proposed, to: golden)
+    |> result.replace_error(WriteFailed(golden)),
+  )
+  let _ = simplifile.delete(proposed)
+  Ok(Nil)
+}
+
 /// Whether the suite is running in accept mode (`SCREENSHOT_ACCEPT=true`), in
-/// which `matches_baseline` adopts the current render as the baseline instead
-/// of comparing against it.
+/// which a render that has drifted past the threshold (or has no baseline yet)
+/// is adopted as the new baseline instead of failing.
 fn accepting() -> Bool {
   case envoy.get("SCREENSHOT_ACCEPT") {
     Ok("true") | Ok("1") -> True
