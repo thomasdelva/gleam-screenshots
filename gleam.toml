@@ -2,9 +2,9 @@ name = "gleam_screenshots"
 version = "1.0.0"
 # `target` is just the default for this package's own `gleam test` (the template
 # tests use the JavaScript-only `linkedom` path). The library itself is
-# dual-target: it shells out to Chrome and odiff through per-target FFI (Node
-# `child_process` on JS, an Erlang port on the BEAM), so an Erlang/OTP project
-# can depend on it and use `capture` / `document_matches_baseline`.
+# dual-target: it shells out to Chrome and odiff through `shellout` (which spawns
+# directly on both Node and the BEAM), so an Erlang/OTP project can depend on it
+# and use `capture` / `document_matches_baseline`.
 target = "javascript"
 
 description = "Screenshot regression testing for Gleam web UIs, on the JavaScript target or the BEAM. Renders raw HTML with headless Chrome and pixel-diffs against committed baselines."
@@ -15,13 +15,13 @@ links = [{ title = "Website", href = "https://github.com/thomasdelva/gleam-scree
 # Library code (src/) deliberately does NOT depend on Lustre — it works with
 # any view layer that can produce an HTML string (Lustre, htmx, hand-written
 # templates...). Lustre is only a dev-dependency, used by the example test to
-# demonstrate `lustre/element.to_string` interop. Process spawning is done with
-# our own dual-target FFI rather than a JS-only child_process package, so the
-# library compiles on Erlang too.
+# demonstrate `lustre/element.to_string` interop. Process spawning uses
+# `shellout`, a small dual-target package, so the library compiles on Erlang too.
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 envoy = ">= 1.2.0 and < 2.0.0"
 simplifile = ">= 2.4.0 and < 3.0.0"
+shellout = ">= 1.8.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

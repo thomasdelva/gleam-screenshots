@@ -68,8 +68,8 @@ re-trigger workflows, so it can't loop; remove the label to re-arm the compare.
 | Path | Role |
 | --- | --- |
 | `src/screenshot.gleam` | Public API: `capture`, `document_matches_baseline` (any target), `capture_in_template`, `render`, `matches_baseline` (JS-only template path), `diff`. |
-| `src/screenshot/exec.gleam` + `exec.ffi.mjs` + `src/screenshot_ffi.erl` | Per-target FFI for running an executable (Chrome, odiff) — Node `spawnSync` / an Erlang port — so the library runs on both targets. `screenshot_ffi.erl` also backs `dom.platform`. |
-| `src/screenshot/dom.gleam` + `dom.ffi.mjs` | FFI: template injection (linkedom, JS-only) + host platform detection (both targets). |
+| `src/screenshot/exec.gleam` | Thin wrapper over the `shellout` package: run an executable (Chrome, odiff) and capture its exit status + combined output, on both targets. |
+| `src/screenshot/dom.gleam` + `dom.ffi.mjs` + `src/screenshot_ffi.erl` | FFI: template injection (linkedom, JS-only) + host platform detection (both targets; `screenshot_ffi.erl` is the BEAM side of `platform`). |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/` | `template.html` + `styles.css` the tests render. |
 | `.github/workflows/ci.yml` | This repo's own self-contained CI (screenshots + format); the screenshots job folds in the label-gated accept as a plain `git` commit step. |

@@ -215,9 +215,8 @@ pub fn diff(
     diff_path,
   ]
 
-  // odiff exits 0 when the images match and 22 when they differ; anything else
-  // (including -1, which `exec.run` reports when odiff couldn't be started) is a
-  // genuine failure.
+  // odiff exits 0 when the images match and 22 when they differ; any other
+  // status (e.g. odiff couldn't be started) is a genuine failure.
   case exec.run(odiff, args) {
     exec.Run(status: 0, ..) -> Ok(True)
     exec.Run(status: 22, ..) -> Ok(False)
