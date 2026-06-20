@@ -71,7 +71,7 @@ re-trigger workflows, so it can't loop; remove the label to re-arm the compare.
 | `src/screenshot.ffi.mjs` + `src/screenshot_ffi.erl` | Per-target FFI for host `platform()` detection only (Node `process.platform` / Erlang `os:type`). |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/styles.css` | The stylesheet the tests inline into a complete HTML document. |
-| `.github/workflows/ci.yml` | This repo's own self-contained CI (screenshots + format); the screenshots job folds in the label-gated accept as a plain `git` commit step. |
+| `.github/workflows/ci.yml` | This repo's own self-contained CI: one `gleam` job (format check plus the screenshot suite on both targets) that also runs the label-gated accept as a plain `git` commit step. |
 
 - **Keep `src/` free of Lustre.** Lustre is a dev-dependency only (used by one
   example test); the library must stay view-layer agnostic and operate on HTML

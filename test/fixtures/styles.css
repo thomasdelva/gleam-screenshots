@@ -1,6 +1,5 @@
-/* Stylesheet for the screenshot test fixtures. Linked relatively from
-   template.html, so it also exercises that a template's relative
-   <link rel="stylesheet"> resolves under the file:// URL Chrome loads.
+/* Stylesheet for the screenshot fixtures. The test suite reads this file and
+   inlines it into a complete HTML document before rendering.
 
    The fixtures lean on font-independent CSS (layout, colour, borders,
    gradients) so baselines stay stable across machines. */

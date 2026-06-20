@@ -67,10 +67,11 @@ provided; build your own with `ScreenSize(width:, height:)`. For finer control,
 
 ## Outcomes & accepting changes
 
-`document_matches_baseline` returns `Ok(Match)` on a match, or — both failures, leaving a
-proposed `*.new.png` and a `*.diff.png` next to the baseline for review —
-`Ok(Mismatch(diff:, proposed:))` when the render differs, or `Ok(Missing(proposed:))`
-when there's no baseline yet. Baselines are committed **per platform**
+`document_matches_baseline` returns `Ok(Match)` on a match, `Ok(Mismatch(diff:,
+proposed:))` when the render differs (leaving `*.new.png` + `*.diff.png` next to
+the baseline for review), or `Ok(Missing(proposed:))` when there's no baseline
+yet (leaving just the `*.new.png`). Both `Mismatch` and `Missing` are failures.
+Baselines are committed **per platform**
 (`home.linux.png`, `home.darwin.png`), since rendering differs across OSes.
 
 When a change is intentional, accept it in one step:
@@ -147,7 +148,7 @@ jobs:
 
 Create the `accept-screenshots` label once; while it's on a PR, each run
 refreshes the baselines on the branch. Remove it to re-arm the compare guard.
-This repo dogfoods the same job via
+This repo dogfoods this setup via
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 > The accept commit is pushed with the default `GITHUB_TOKEN`, and GitHub does
