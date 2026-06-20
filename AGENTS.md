@@ -53,15 +53,15 @@ gleam test
 ### Regenerating / accepting baselines
 
 ```sh
-SCREENSHOT_ACCEPT=true gleam test     # adopt current renders as baselines, then pass
+SCREENSHOT_ACCEPT=true gleam test     # adopt drifted/missing renders as baselines, then pass
 ```
 
 Only commit baselines for the platform you actually rendered on — do not
-hand-edit or overwrite another platform's `*.png`. In CI, accepting is a
-one-click `accept-screenshots` label that re-runs the screenshots job in accept
-mode (see `.github/workflows/ci.yml`). That push uses `GITHUB_TOKEN`, which does
-not re-trigger workflows, so re-run the regression check afterwards (or wire a
-PAT push) to refresh its status.
+hand-edit or overwrite another platform's `*.png`. In CI, accepting is the
+`accept-screenshots` label: while it's on a PR, each run renders in accept mode
+and a plain `git` step commits whatever the library refreshed (see
+`.github/workflows/ci.yml`). That push uses `GITHUB_TOKEN`, which does not
+re-trigger workflows, so it can't loop; remove the label to re-arm the compare.
 
 ## Layout & conventions
 
@@ -72,8 +72,7 @@ PAT push) to refresh its status.
 | `src/screenshot/dom.gleam` + `dom.ffi.mjs` | FFI: template injection (linkedom, JS-only) + host platform detection (both targets). |
 | `test/gleam_screenshots_test.gleam` | Suite + living documentation of features. |
 | `test/fixtures/` | `template.html` + `styles.css` the tests render. |
-| `accept/action.yml` | Composite action for the accept step: after a `SCREENSHOT_ACCEPT` run, commit + push the refreshed baselines and drop the label. |
-| `.github/workflows/ci.yml` | This repo's own self-contained CI (screenshots + format); the screenshots job folds in the label-gated accept, dogfooding the `accept` action. |
+| `.github/workflows/ci.yml` | This repo's own self-contained CI (screenshots + format); the screenshots job folds in the label-gated accept as a plain `git` commit step. |
 
 - **Keep `src/` free of Lustre.** Lustre is a dev-dependency only (used by one
   example test); the library must stay view-layer agnostic and operate on HTML

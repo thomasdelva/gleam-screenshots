@@ -88,7 +88,8 @@ when there's no baseline yet. Baselines are committed **per platform**
 
 When a change is intentional, accept it in one step:
 
-- **Locally:** `SCREENSHOT_ACCEPT=true gleam test` refreshes every baseline.
+- **Locally:** `SCREENSHOT_ACCEPT=true gleam test` refreshes any baseline that
+  drifted past the threshold (and creates missing ones).
 - **In CI:** add the `accept-screenshots` label to the PR (see below).
 
 ## CI
@@ -99,11 +100,13 @@ on the runner. Write one job: set up your toolchain, install odiff (and
 the binaries, and run the suite. On a regression `gleam test` exits non-zero and
 leaves `*.new.png` / `*.diff.png` for you to upload.
 
-Accepting an intentional change is the *same* job: adding the
-`accept-screenshots` label flips the run into `SCREENSHOT_ACCEPT` mode, and the
-composite **`accept` action** commits the refreshed baselines, pushes them back,
-and drops the label. The label path is the only reason the job needs write
-permissions; a plain compare never pushes.
+Accepting an intentional change is the *same* job: while the `accept-screenshots`
+label is on the PR, the run goes into `SCREENSHOT_ACCEPT` mode (the library
+refreshes any baseline past the threshold) and a label-gated step commits the
+result and pushes it back. Since the library does the adopting, the step is just
+plain `git` — no custom action. The label stays on until you remove it, so every
+push keeps adopting; drop the label to re-arm the compare guard. That accept path
+is the only reason the job needs `contents: write`; a plain compare never pushes.
 
 ```yaml
 # .github/workflows/screenshots.yml
@@ -118,7 +121,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # accept mode pushes the refreshed baselines
-      pull-requests: write # accept mode drops the label
     steps:
       - uses: actions/checkout@v4
         with: { ref: ${{ github.head_ref || github.ref_name }} }
@@ -135,12 +137,18 @@ jobs:
       # - run: gleam run -m lustre/dev build --outdir=priv/static
       - run: gleam test
         env:
-          SCREENSHOT_ACCEPT: ${{ github.event.label.name == 'accept-screenshots' }}
+          SCREENSHOT_ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           ODIFF_BIN: node_modules/.bin/odiff
-      - if: ${{ success() && github.event.label.name == 'accept-screenshots' }}
-        uses: thomasdelva/gleam-screenshots/accept@main
-        # with: { paths: test/screenshots }  # scope the accept commit, if you like
+      - if: ${{ success() && contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- test/screenshots
+          if ! git diff --cached --quiet; then
+            git commit -m "Accept updated screenshots"
+            git push origin "HEAD:${{ github.head_ref }}"
+          fi
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -151,16 +159,16 @@ jobs:
           if-no-files-found: ignore
 ```
 
-Create the `accept-screenshots` label once; adding it to a PR refreshes the
-baselines on the branch. This repo dogfoods the same job via
+Create the `accept-screenshots` label once; while it's on a PR, each run
+refreshes the baselines on the branch. Remove it to re-arm the compare guard.
+This repo dogfoods the same job via
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-> **After accepting, re-run the regression check.** The accept action pushes with
-> the default `GITHUB_TOKEN`, and GitHub does not trigger new workflow runs from
-> `GITHUB_TOKEN` pushes, so the regression check won't re-run itself — re-run it
-> from the Actions tab (the accept commit is already correct). To make it
-> self-heal to green automatically, check out with a PAT (`token:`) so the push
-> is attributed to a user.
+> The accept commit is pushed with the default `GITHUB_TOKEN`, and GitHub does
+> not start new workflow runs from `GITHUB_TOKEN` pushes — so an accept push
+> won't trigger another run (which is what keeps it from looping). Remove the
+> label when you're done; the next push runs the compare and confirms the
+> committed baselines are green.
 
 ## API
 

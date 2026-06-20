@@ -3,9 +3,10 @@
 # reusable workflow to call — consumers write their own job like the one below
 # and run `gleam test`.
 #
-# Accepting is folded in as a label-gated tail of the same job: adding the
-# `accept-screenshots` label re-runs the suite in SCREENSHOT_ACCEPT mode and the
-# composite `accept` action commits + pushes the refreshed baselines. The
+# Accepting is folded into the same job: while the `accept-screenshots` label is
+# on the PR, the run goes into SCREENSHOT_ACCEPT mode (the library refreshes any
+# baseline that drifted past the threshold) and the commit step pushes the
+# result back. The label stays until removed, so every push keeps adopting. The
 # regular run needs none of that — `gleam test` alone is the compare.
 
 name: ci
@@ -21,7 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # accept mode pushes the refreshed baselines
-      pull-requests: write # accept mode drops the label
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,16 +43,23 @@ jobs:
         id: setup-chrome
         with:
           chrome-version: "131.0.6778.204"
-      # SCREENSHOT_ACCEPT is true only on the accept-screenshots label, which
-      # turns this run into a baseline refresh; otherwise it's the compare.
+      # Accept mode (refresh the baselines) whenever the label is on the PR;
+      # otherwise this run is the compare.
       - run: gleam test
         env:
-          SCREENSHOT_ACCEPT: ${{ github.event.label.name == 'accept-screenshots' }}
+          SCREENSHOT_ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           ODIFF_BIN: node_modules/.bin/odiff
       - name: Commit accepted baselines
-        if: ${{ success() && github.event.label.name == 'accept-screenshots' }}
-        uses: ./accept
+        if: ${{ success() && contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- test/screenshots
+          if ! git diff --cached --quiet; then
+            git commit -m "Accept updated screenshots"
+            git push origin "HEAD:${{ github.head_ref }}"
+          fi
       - name: Upload proposed screenshots and diffs
         if: failure()
         uses: actions/upload-artifact@v4
