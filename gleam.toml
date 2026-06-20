@@ -5,7 +5,7 @@ version = "1.0.0"
 # with no JavaScript-only code. CI runs `gleam test` on both targets; there's no
 # `target` default to pin.
 
-description ="Screenshot regression testing for Gleam web UIs, on the JavaScript target or the BEAM. Renders raw HTML with headless Chrome and pixel-diffs against committed baselines."
+description = "Screenshot regression testing for Gleam web UIs, on the JavaScript target or the BEAM. Renders raw HTML with headless Chrome and pixel-diffs against committed baselines."
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "thomasdelva", repo = "gleam-screenshots" }
 links = [{ title = "Website", href = "https://github.com/thomasdelva/gleam-screenshots" }]

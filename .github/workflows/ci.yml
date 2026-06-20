@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # Only JS peer dep is the odiff binary (no linkedom anymore).
+      # The only JS peer dependency is the odiff binary.
       - run: npm ci
       - run: gleam deps download
       - uses: browser-actions/setup-chrome@v1
@@ -58,7 +58,7 @@ jobs:
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
       - name: Commit accepted baselines
-        if: ${{ success() && contains(github.event.pull_request.labels.*.name, 'accept-screenshots') }}
+        if: ${{ success() && env.SCREENSHOT_ACCEPT == 'true' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

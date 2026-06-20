@@ -41,7 +41,7 @@ gleam test                             # default target; CI also runs --target j
 ## Baselines
 
 - Committed baselines are `test/screenshots/<name>.<platform>.png`, one **per
-  platform** (`uname`/`process.platform`: `linux`, `darwin`, ...). The committed
+  platform** (`os:type`/`process.platform`: `linux`, `darwin`, ...). The committed
   set here is `linux` only.
 - `*.new.png` (proposals) and `*.diff.png` (visual diffs) are transient and
   **gitignored** — never commit them.
